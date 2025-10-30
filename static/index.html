@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikeGPT</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="phone-container">
+        <div class="status-bar">
+            <span class="time" id="time"></span>
+        </div>
+
+        <div class="chat-header">
+            <div class="back-button">‹</div>
+            <div class="contact-info">
+                <div class="contact-name">MikeGPT</div>
+            </div>
+            <div class="header-icons">
+                <span class="icon">⓿</span>
+            </div>
+        </div>
+
+        <div class="messages-container" id="messages">
+            <!-- Messages will be inserted here -->
+        </div>
+
+        <div class="input-container">
+            <div class="input-wrapper">
+                <button class="input-icon">+</button>
+                <input
+                    type="text"
+                    id="message-input"
+                    placeholder="iMessage"
+                    autocomplete="off"
+                >
+                <button class="send-button" id="send-button">
+                    <svg width="22" height="22" viewBox="0 0 22 22">
+                        <path d="M2 10.5 L20 10.5 M20 10.5 L13 3.5 M20 10.5 L13 17.5"
+                              stroke="white"
+                              stroke-width="2"
+                              fill="none"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iMessage Timeline Visualizer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 95%;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 300;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        #loading {
+            text-align: center;
+            font-size: 1.2rem;
+            color: #667eea;
+            margin: 3rem 0;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        #visualization {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        #chart {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .contact-label {
+            fill: #e0e0e0;
+            font-size: 12px;
+            font-weight: 400;
+            transition: fill 0.15s ease;
+        }
+
+        .contact-row:hover .contact-label {
+            fill: #667eea;
+            font-weight: 500;
+        }
+
+        .date-label {
+            fill: #888;
+            font-size: 10px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .contact-row:hover .date-label {
+            opacity: 1;
+        }
+
+        .timeline-rect {
+            cursor: pointer;
+            transition: opacity 0.15s ease;
+        }
+
+        .contact-row:hover .timeline-rect {
+            opacity: 0.9;
+        }
+
+        .message-dot {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .axis {
+            color: #666;
+        }
+
+        .axis path,
+        .axis line {
+            stroke: #333;
+        }
+
+        .axis text {
+            fill: #888;
+            font-size: 11px;
+        }
+
+        .tooltip {
+            position: absolute;
+            padding: 12px 16px;
+            background: rgba(20, 20, 30, 0.95);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+        }
+
+        .tooltip.show {
+            opacity: 1;
+        }
+
+        .tooltip-contact {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .tooltip-stat {
+            margin: 4px 0;
+            color: #ccc;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>iMessage Timeline</h1>
+        <div class="subtitle">Your conversations visualized over time</div>
+
+        <div id="loading">Loading your messages...</div>
+
+        <div id="stats" class="stats" style="display: none;"></div>
+
+        <div id="visualization" style="display: none;">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #667eea;"></div>
+                    <span>Sent by you</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #f093fb;"></div>
+                    <span>Received</span>
+                </div>
+            </div>
+            <div id="chart"></div>
+        </div>
+    </div>
+
+    <div class="tooltip"></div>
+
+    <script>
+        // Fetch data and create visualization
+        fetch('/api/data')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('stats').style.display = 'grid';
+                document.getElementById('visualization').style.display = 'block';
+
+                createStats(data);
+                createVisualization(data);
+            })
+            .catch(error => {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').textContent = 'Error loading messages. Make sure iMessage database is accessible.';
+            });
+
+        function createStats(data) {
+            const totalMessages = data.messages.length;
+            const totalContacts = data.conversations.length;
+            const sentMessages = data.messages.filter(m => m.fromMe).length;
+            const receivedMessages = totalMessages - sentMessages;
+
+            const statsHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalContacts.toLocaleString()}</div>
+                    <div class="stat-label">Conversations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${totalMessages.toLocaleString()}</div>
+                    <div class="stat-label">Total Messages</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${sentMessages.toLocaleString()}</div>
+                    <div class="stat-label">Sent</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${receivedMessages.toLocaleString()}</div>
+                    <div class="stat-label">Received</div>
+                </div>
+            `;
+            document.getElementById('stats').innerHTML = statsHTML;
+        }
+
+        function createVisualization(data) {
+            const conversations = data.conversations;
+            const messages = data.messages;
+
+            // Group messages by contact
+            const messagesByContact = {};
+            messages.forEach(msg => {
+                if (!messagesByContact[msg.contact]) {
+                    messagesByContact[msg.contact] = [];
+                }
+                messagesByContact[msg.contact].push(msg);
+            });
+
+            // Dimensions
+            const margin = { top: 20, right: 200, bottom: 60, left: 250 };
+            const width = Math.max(1400, window.innerWidth * 0.9) - margin.left - margin.right;
+            const height = Math.max(600, conversations.length * 35);
+
+            // Create SVG
+            const svg = d3.select('#chart')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            // Parse dates
+            const parseDate = d3.timeParse('%Y-%m-%d %H:%M:%S');
+            conversations.forEach(c => {
+                c.firstMessageDate = parseDate(c.firstMessage);
+                c.lastMessageDate = parseDate(c.lastMessage);
+            });
+
+            // Scales
+            const xScale = d3.scaleTime()
+                .domain([
+                    d3.min(conversations, d => d.firstMessageDate),
+                    d3.max(conversations, d => d.lastMessageDate)
+                ])
+                .range([0, width]);
+
+            const yScale = d3.scaleBand()
+                .domain(conversations.map(c => c.contact))
+                .range([0, height])
+                .padding(0.2);
+
+            // Color scale
+            const colorScale = d3.scaleLinear()
+                .domain([0, d3.max(conversations, d => d.messageCount)])
+                .range(['#4a5568', '#667eea']);
+
+            // Axes
+            const xAxis = d3.axisBottom(xScale)
+                .ticks(10)
+                .tickFormat(d3.timeFormat('%b %Y'));
+
+            const xAxisTop = d3.axisTop(xScale)
+                .ticks(10)
+                .tickFormat(d3.timeFormat('%b %Y'));
+
+            // Bottom axis
+            svg.append('g')
+                .attr('class', 'axis')
+                .attr('transform', `translate(0,${height})`)
+                .call(xAxis)
+                .selectAll('text')
+                .style('text-anchor', 'end')
+                .attr('dx', '-.8em')
+                .attr('dy', '.15em')
+                .attr('transform', 'rotate(-45)');
+
+            // Top axis
+            svg.append('g')
+                .attr('class', 'axis')
+                .attr('transform', `translate(0,0)`)
+                .call(xAxisTop);
+
+            // Create contact row groups
+            const contactRows = svg.append('g')
+                .selectAll('g')
+                .data(conversations)
+                .enter()
+                .append('g')
+                .attr('class', 'contact-row');
+
+            // Contact name labels
+            contactRows.append('text')
+                .attr('class', 'contact-label')
+                .attr('x', -10)
+                .attr('y', d => yScale(d.contact) + yScale.bandwidth() / 2)
+                .attr('text-anchor', 'end')
+                .attr('dominant-baseline', 'middle')
+                .text(d => {
+                    const contact = d.contact;
+                    return contact.length > 30 ? contact.substring(0, 27) + '...' : contact;
+                });
+
+            // Date range labels (shown on hover)
+            contactRows.append('text')
+                .attr('class', 'date-label')
+                .attr('x', -10)
+                .attr('y', d => yScale(d.contact) + yScale.bandwidth() / 2 + 12)
+                .attr('text-anchor', 'end')
+                .text(d => {
+                    const start = d3.timeFormat('%b %Y')(d.firstMessageDate);
+                    const end = d3.timeFormat('%b %Y')(d.lastMessageDate);
+                    return `${start} - ${end}`;
+                });
+
+            // Tooltip
+            const tooltip = d3.select('.tooltip');
+
+            // Timeline bars
+            contactRows.append('rect')
+                .attr('class', 'timeline-rect')
+                .attr('x', d => xScale(d.firstMessageDate))
+                .attr('y', d => yScale(d.contact))
+                .attr('width', d => Math.max(2, xScale(d.lastMessageDate) - xScale(d.firstMessageDate)))
+                .attr('height', yScale.bandwidth())
+                .attr('rx', 4)
+                .attr('fill', d => colorScale(d.messageCount))
+                .style('opacity', 0.7)
+                .on('mouseover', function(event, d) {
+                    tooltip.classed('show', true)
+                        .html(`
+                            <div class="tooltip-contact">${d.contact}</div>
+                            <div class="tooltip-stat">📊 ${d.messageCount.toLocaleString()} messages</div>
+                            <div class="tooltip-stat">📤 ${d.sentCount.toLocaleString()} sent</div>
+                            <div class="tooltip-stat">📥 ${d.receivedCount.toLocaleString()} received</div>
+                            <div class="tooltip-stat">📅 ${d3.timeFormat('%b %d, %Y')(d.firstMessageDate)} - ${d3.timeFormat('%b %d, %Y')(d.lastMessageDate)}</div>
+                        `)
+                        .style('left', (event.pageX + 15) + 'px')
+                        .style('top', (event.pageY - 15) + 'px');
+                })
+                .on('mouseout', function() {
+                    tooltip.classed('show', false);
+                });
+
+            // Add message dots (optimized - sample more aggressively)
+            conversations.forEach((conv, i) => {
+                const contactMessages = messagesByContact[conv.contact] || [];
+
+                // Sample messages more aggressively for performance
+                const sampleRate = Math.max(1, Math.ceil(contactMessages.length / 200));
+                const sampledMessages = contactMessages.filter((_, i) => i % sampleRate === 0);
+
+                // Append dots to the contact row group
+                const rowGroup = d3.selectAll('.contact-row').filter((d, idx) => idx === i);
+
+                rowGroup.selectAll('circle')
+                    .data(sampledMessages)
+                    .enter()
+                    .append('circle')
+                    .attr('class', 'message-dot')
+                    .attr('cx', d => xScale(parseDate(d.date)))
+                    .attr('cy', yScale(conv.contact) + yScale.bandwidth() / 2)
+                    .attr('r', 1.5)
+                    .attr('fill', d => d.fromMe ? '#667eea' : '#f093fb');
+            });
+        }
+    </script>
+</body>
+</html>

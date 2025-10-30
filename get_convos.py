@@ -2,17 +2,60 @@
 import sqlite3
 import os
 import re
+import string
 
 DB_PATH = os.path.expanduser("~/Library/Messages/chat.db")
 OUTPUT_FILE = "imessages_dataset.txt"
 
 # Patterns
-REACTION_PATTERNS = re.compile(r'^(Loved|Liked|Laughed at|Disliked) ".+"$', re.DOTALL)
+REACTION_PATTERNS = re.compile(r'^(Loved|Liked|Laughed at|Disliked|Emphasized) ', re.DOTALL)
 URL_PATTERN = re.compile(r'https?://\S+')
 
-# Your Apple ID (to filter out self-convos)
-SELF_ADDRESS = "+17163594066"
+SELF_ADDRESS = "REPLACE"
 
+ME_PATTERN = "<|Me|>"
+THEM_PATTERN = "<|Them|>"
+
+PRINTABLE = set(string.printable)  # ascii letters, digits, punctuation, etc.
+
+def extract_text(row_text, row_attributed):
+    """Get clean message text from iMessage DB row."""
+    # First try the plain text field
+    if row_text and row_text.strip():
+        return row_text.strip()
+    
+    if not row_attributed:
+        return None
+    
+    try:
+        # Use PyObjC to properly deserialize the NSAttributedString
+        from Foundation import NSData, NSKeyedUnarchiver
+        
+        # Convert bytes to NSData
+        ns_data = NSData.dataWithBytes_length_(row_attributed, len(row_attributed))
+        
+        # Unarchive the attributed string
+        unarchiver = NSKeyedUnarchiver.alloc().initForReadingWithData_(ns_data)
+        unarchiver.setRequiresSecureCoding_(False)
+        attributed_string = unarchiver.decodeObjectForKey_("root")
+        unarchiver.finishDecoding()
+        
+        if attributed_string is None:
+            return None
+        
+        # Get the plain string from the attributed string
+        text = attributed_string.string()
+        
+        if text:
+            return text.strip()
+        
+        return None
+        
+    except Exception as e:
+        # If PyObjC fails, print debug info and return None
+        print(f"⚠️  Failed to extract attributed text: {e}")
+        print(f"   Raw bytes preview: {row_attributed[:100] if row_attributed else 'None'}")
+        return None
 
 def fetch_conversations():
     conn = sqlite3.connect(DB_PATH)
@@ -36,6 +79,7 @@ def fetch_conversations():
                 datetime(message.date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch') as message_date,
                 handle.id as sender,
                 message.text,
+                message.attributedBody,
                 message.is_from_me
             FROM chat_message_join cmj
             JOIN message ON cmj.message_id = message.ROWID
@@ -51,20 +95,32 @@ def fetch_conversations():
 
         # Apply filters
         filtered = []
-        for rowid, date, sender, text, is_from_me in messages:
+        for rowid, date, sender, text, attrib, is_from_me in messages:
+
+            text = extract_text(text, attrib)
+            
             if not text or not re.search(r"\S", text):
                 continue
             if URL_PATTERN.search(text):
                 continue
-            if not is_from_me and REACTION_PATTERNS.match(text.strip()):
-                continue
+
+            # Handle reaction messages
+            reaction_match = REACTION_PATTERNS.match(text.strip())
+            if reaction_match:
+                if is_from_me:
+                    # Convert my reactions to tokens
+                    reaction_type = reaction_match.group(1)
+                    text = f"<|{reaction_type}|>"
+                else:
+                    # Skip their reactions
+                    continue
 
             # Remove object replacement characters and other special chars
             text = text.replace('\ufffc', '').strip()
             if not text or not re.search(r"\S", text):
                 continue
 
-            role = "Me:" if is_from_me else "Them:"
+            role = ME_PATTERN if is_from_me else THEM_PATTERN
             filtered.append((role, text))
 
         if not filtered:
@@ -72,7 +128,7 @@ def fetch_conversations():
 
         # Keep only convos where you appear at least once
         roles = [r for r, _ in filtered]
-        if "Me:" not in roles:
+        if ME_PATTERN not in roles:
             continue
 
         all_convos.append(filtered)
@@ -90,22 +146,20 @@ def write_dataset(conversations):
                 continue
 
             convo_index += 1
-            f.write(f"====== Conversation {convo_index} ======\n")
-
             # Filter out whitespace-only messages before merging
             non_whitespace = [(role, text) for role, text in cleaned if re.search(r"\S", text)]
 
             # Concatenate successive "Them:" messages only
             merged = []
             for role, text in non_whitespace:
-                if merged and merged[-1][0] == role and role == "Them:":
+                if merged and merged[-1][0] == role and role == THEM_PATTERN:
                     merged[-1] = (role, merged[-1][1] + " " + text)
                 else:
                     merged.append((role, text))
 
             for role, text in merged:
-                f.write(f"{role} {text}<|endoftext|>\n")
-            f.write("\n")  # blank line between conversations
+                f.write(f"{role}{text}")
+            f.write("<|endoftext|>")  # blank line between conversations
 
 
 if __name__ == "__main__":
