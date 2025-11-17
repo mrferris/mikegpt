@@ -9,11 +9,11 @@ from cs336_basics.training.checkpointing import load_checkpoint
 from cs336_basics.tokenization.bpe import Tokenizer
 import torch
 import torch.nn.functional as F
-import random
+
 
 class Model:
     def __init__(self, checkpoint_path):
-        self.device = "cpu"
+        self.device = "mps"
         self.context_length = 256
         d_model = 512
         vocab_size = 8192
@@ -22,22 +22,26 @@ class Model:
         d_ff = 1344
         rope_theta = 10000
 
-        self.model = TransformerLM(
-            d_model=d_model,
-            vocab_size=vocab_size,
-            context_length=self.context_length,
-            num_layers=num_layers,
-            num_heads=num_heads,
-            d_ff=d_ff,
-            rope_theta=rope_theta,
-            device=self.device,
-        ).to(self.device).eval()
+        self.model = (
+            TransformerLM(
+                d_model=d_model,
+                vocab_size=vocab_size,
+                context_length=self.context_length,
+                num_layers=num_layers,
+                num_heads=num_heads,
+                d_ff=d_ff,
+                rope_theta=rope_theta,
+                device=self.device,
+            )
+            .to(self.device)
+            .eval()
+        )
 
         load_checkpoint(checkpoint_path, self.model, None)
 
         self.tokenizer = Tokenizer.from_files(
             "../cs336/assignment1-basics/cs336_basics/output/openwebtext_vocab.json",
-            "../cs336/assignment1-basics/cs336_basics/output/openwebtext_merges.pkl"
+            "../cs336/assignment1-basics/cs336_basics/output/openwebtext_merges.pkl",
         )
 
         self.current_tokens = None  # running token buffer on device
@@ -46,32 +50,132 @@ class Model:
         """Tokenize prompt once and store on device."""
         tokens = self.tokenizer.encode(prompt)
         if len(tokens) > self.context_length:
-            tokens = tokens[-self.context_length:]
-        self.current_tokens = torch.tensor([tokens], device=self.device, dtype=torch.long)
+            tokens = tokens[-self.context_length :]
+        self.current_tokens = torch.tensor(
+            [tokens], device=self.device, dtype=torch.long
+        )
 
-    def next_token(self) -> str:
-        """Fast next-token generation (no re-tokenization)."""
+    def next_token(self, temperature: float = 1.0, top_k: int = 5) -> str:
+        """Fast next-token generation (proper top-k sampling with temperature)."""
         if self.current_tokens is None:
             raise RuntimeError("Must call .prime(prompt) before .next_token()")
 
         with torch.no_grad():
             logits = self.model(self.current_tokens)
-            last_logits = logits[0, -1]
+            last_logits = logits[0, -1] / temperature  # apply temperature
             probs = F.softmax(last_logits, dim=-1)
 
-        top_k = 3
-        top_probs, top_idx = torch.topk(probs, k=top_k)
-        chosen_id = int(top_idx[random.randint(0, top_k - 1)].item())
+            # Take top-k tokens
+            top_probs, top_idx = torch.topk(probs, k=top_k)
+            top_probs = top_probs / top_probs.sum()  # renormalize to sum to 1
+
+            # Sample one token from the top-k distribution
+            choice = torch.multinomial(top_probs, 1)
+            chosen_id = int(top_idx[choice].item())
 
         # Append new token on GPU, cropping if needed
         new_token = torch.tensor([[chosen_id]], device=self.device)
         if self.current_tokens.size(1) >= self.context_length:
-            self.current_tokens = torch.cat([self.current_tokens[:, 1:], new_token], dim=1)
+            self.current_tokens = torch.cat(
+                [self.current_tokens[:, 1:], new_token], dim=1
+            )
         else:
             self.current_tokens = torch.cat([self.current_tokens, new_token], dim=1)
 
         return self.tokenizer.decode([chosen_id])
-        
+
+    def get_top_k_tokens(self, tokens_tensor, k: int = 20):
+        """
+        Get top K tokens and their probabilities for a given token sequence.
+        Does not modify model state.
+
+        Args:
+            tokens_tensor: Token tensor (shape: [1, seq_len])
+            k: Number of top tokens to return
+
+        Returns:
+            List of tuples: [(token_id, token_str, probability), ...]
+        """
+        with torch.no_grad():
+            logits = self.model(tokens_tensor)
+            last_logits = logits[0, -1]
+            probs = F.softmax(last_logits, dim=-1)
+
+            top_probs, top_idx = torch.topk(probs, k=k)
+
+            results = []
+            for prob, idx in zip(top_probs, top_idx):
+                token_id = int(idx.item())
+                token_str = self.tokenizer.decode([token_id])
+                probability = float(prob.item())
+                results.append((token_id, token_str, probability))
+
+            return results
+
+    def build_beam_tree(self, prompt: str, k: int = 20, n: int = 100):
+        """
+        Build a beam search tree showing top K tokens at each level for N levels.
+
+        Args:
+            prompt: Initial prompt to start from
+            k: Number of top tokens to explore at each level
+            n: Number of levels deep to explore
+
+        Returns:
+            Tree structure with nodes containing token info and children
+        """
+        # Tokenize the initial prompt
+        print(prompt)
+
+        prompt = "<|Them|>" + prompt + "<|Me|>"
+        print(prompt)
+        tokens = self.tokenizer.encode(prompt)
+        if len(tokens) > self.context_length:
+            tokens = tokens[-self.context_length :]
+
+        initial_tokens = torch.tensor([tokens], device=self.device, dtype=torch.long)
+
+        # Build the tree recursively
+        def build_node(tokens_tensor, depth, cumulative_prob):
+            if depth >= n:
+                return None
+
+            # Get top K tokens for current state
+            top_k = self.get_top_k_tokens(tokens_tensor, k=k)
+
+            children = []
+            for token_id, token_str, probability in top_k:
+                # Create new token sequence with this token appended
+                new_token = torch.tensor([[token_id]], device=self.device)
+
+                # Handle context length limit
+                if tokens_tensor.size(1) >= self.context_length:
+                    new_tokens = torch.cat([tokens_tensor[:, 1:], new_token], dim=1)
+                else:
+                    new_tokens = torch.cat([tokens_tensor, new_token], dim=1)
+
+                # Recursively build children for this token
+                child_node = {
+                    "token_id": token_id,
+                    "token_str": token_str,
+                    "probability": probability,
+                    "cumulative_prob": cumulative_prob * probability,
+                    "depth": depth,
+                    "children": build_node(
+                        new_tokens, depth + 1, cumulative_prob * probability
+                    ),
+                }
+                children.append(child_node)
+
+            return children if children else None
+
+        # Build tree starting from initial prompt
+        tree = {
+            "prompt": prompt,
+            "children": build_node(initial_tokens, 0, 1.0),
+        }
+
+        return tree
 
     def generate_response_stream(self, conversation_history: str, user_message: str):
         """
@@ -88,7 +192,6 @@ class Model:
         # 1. Build initial context and prime the model
         context = conversation_history + f"<|Them|>{user_message}<|Me|>"
         self.prime(context)
-
         current_response = ""
         max_tokens = 200  # safety cap
         generated_any = False
@@ -108,7 +211,14 @@ class Model:
                 if token in ["<|Them|>", "<|endoftext|>"]:
                     break
 
-            elif token in ["<|Liked|>", "<|Laughed|>", "<|Loved|>", "<|Disliked|>", "<|Questioned|>", "<|Emphasized|>"]:
+            elif token in [
+                "<|Liked|>",
+                "<|Laughed|>",
+                "<|Loved|>",
+                "<|Disliked|>",
+                "<|Questioned|>",
+                "<|Emphasized|>",
+            ]:
                 # single reaction token as message
                 yield token
                 generated_any = True

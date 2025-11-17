@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drive</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #loading-screen.hidden {
+            display: none;
+        }
+
+        .prompt-input {
+            background: #111;
+            border: 2px solid #333;
+            color: #fff;
+            padding: 15px 20px;
+            font-size: 18px;
+            width: 500px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .prompt-input:focus {
+            border-color: #fff;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .control-input {
+            background: #111;
+            border: 2px solid #333;
+            color: #fff;
+            padding: 10px 15px;
+            font-size: 16px;
+            width: 80px;
+            border-radius: 8px;
+            outline: none;
+            text-align: center;
+        }
+
+        .control-label {
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .start-btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .start-btn:active {
+            transform: scale(0.95);
+        }
+
+        .loading-text {
+            color: #666;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        #game-container {
+            display: none;
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            perspective: 1500px;
+            perspective-origin: 50% 40%;
+        }
+
+        #game-container.active {
+            display: block;
+        }
+
+        .level-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s;
+        }
+
+        .carousel {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .token-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 30px 40px;
+            min-width: 200px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            backdrop-filter: blur(10px);
+        }
+
+        .token-card:hover {
+            transform: translateY(-10px) scale(1.05);
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .token-card.active {
+            border-color: #fff;
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+            opacity: 1 !important;
+        }
+
+        .token-card.dimmed {
+            opacity: 0.4;
+            transform: scale(0.95);
+        }
+
+        .token-text {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            word-wrap: break-word;
+            max-width: 200px;
+        }
+
+        .token-prob {
+            color: #999;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .cumulative-prob {
+            color: #666;
+            font-size: 12px;
+            font-family: monospace;
+            margin-top: 5px;
+        }
+
+        /* Multi-level depth view - curved road effect */
+        .level-0 { z-index: 100; transform: translateZ(0px) translateY(-100px) scale(1); opacity: 1; }
+        .level-1 { z-index: 90; transform: translateZ(-500px) translateY(0px) scale(0.82); opacity: 1; }
+        .level-2 { z-index: 80; transform: translateZ(-1000px) translateY(70px) scale(0.68); opacity: 0.95; }
+        .level-3 { z-index: 70; transform: translateZ(-1500px) translateY(120px) scale(0.56); opacity: 0.9; }
+        .level-4 { z-index: 60; transform: translateZ(-2000px) translateY(160px) scale(0.46); opacity: 0.85; }
+
+        .controls-overlay {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px 30px;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+        }
+
+        .control-hint {
+            color: #999;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+        }
+
+        .key {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-family: monospace;
+            font-size: 12px;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .path-display {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+        }
+
+        .path-display.hidden {
+            display: none;
+        }
+
+        .path-title {
+            color: #999;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .path-text {
+            font-size: 16px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .depth-indicator {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            text-align: center;
+            min-width: 100px;
+        }
+
+        .depth-label {
+            color: #999;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .depth-value {
+            font-size: 36px;
+            font-weight: 600;
+        }
+
+        .title {
+            position: fixed;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            font-size: 42px;
+            font-weight: 600;
+            letter-spacing: 0px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+
+        .error-message {
+            color: #f44;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            border-radius: 8px;
+        }
+
+        .selection-controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 200;
+        }
+
+        .action-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #fff;
+        }
+
+        .action-btn.positive {
+            border-color: rgba(0, 255, 0, 0.5);
+        }
+
+        .action-btn.positive:hover {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: #0f0;
+        }
+
+        .action-btn.negative {
+            border-color: rgba(255, 0, 0, 0.5);
+        }
+
+        .action-btn.negative:hover {
+            background: rgba(255, 0, 0, 0.2);
+            border-color: #f00;
+        }
+
+        .selections-panel {
+            position: fixed;
+            top: 50%;
+            right: 30px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 300px;
+            max-height: 60vh;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            display: none;
+        }
+
+        .selections-panel.active {
+            display: block;
+        }
+
+        .selection-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            font-size: 13px;
+            border-left: 3px solid #0f0;
+        }
+
+        .selection-item.negative {
+            border-left-color: #f00;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading-text {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+        <input type="text" class="prompt-input" id="prompt" placeholder="Enter your prompt..." value="Hello">
+
+        <div class="controls">
+            <div>
+                <div class="control-label">K (branches)</div>
+                <input type="number" class="control-input" id="k-value" min="1" max="20" value="5">
+            </div>
+            <div>
+                <div class="control-label">N (depth)</div>
+                <input type="number" class="control-input" id="n-value" min="1" max="10" value="5">
+            </div>
+        </div>
+
+        <button class="start-btn" id="start-btn" onclick="startDrive()">START</button>
+        <div id="error-container"></div>
+    </div>
+
+    <div id="game-container">
+        <div class="title">MikeRL</div>
+
+        <div class="path-display" id="path-display">
+            <div class="path-title">Current Path</div>
+            <div class="path-text" id="path-text"></div>
+        </div>
+
+        <div class="depth-indicator">
+            <div class="depth-label">Depth</div>
+            <div class="depth-value" id="depth-value">0</div>
+        </div>
+
+        <div id="levels-container"></div>
+
+        <div class="controls-overlay">
+            <div class="control-hint">
+                <span class="key">←</span>
+                <span class="key">→</span>
+                <span>Navigate options</span>
+            </div>
+            <div class="control-hint">
+                <span class="key">SPACE</span>
+                <span>Select and go deeper</span>
+            </div>
+            <div class="control-hint">
+                <span class="key">BACKSPACE</span>
+                <span>Go back</span>
+            </div>
+            <div class="control-hint">
+                <span class="key">G</span>
+                <span>Mark path as Good</span>
+            </div>
+            <div class="control-hint">
+                <span class="key">B</span>
+                <span>Mark path as Bad</span>
+            </div>
+            <div class="control-hint">
+                <span class="key">E</span>
+                <span>Export selections</span>
+            </div>
+        </div>
+
+        <div class="selections-panel" id="selections-panel">
+            <div class="path-title">Selected Paths</div>
+            <div id="selections-list"></div>
+        </div>
+    </div>
+
+    <script>
+        let treeData = null;
+        let currentPath = [];
+        let currentIndex = 0;
+        let selectedPaths = [];
+        let initialK = 5; // Initial K value
+        let initialN = 5; // Initial N value
+        let loadedDepths = new Set(); // Track which depth layers we've already loaded
+
+        async function startDrive() {
+            const prompt = document.getElementById('prompt').value;
+            const k = parseInt(document.getElementById('k-value').value);
+            const n = parseInt(document.getElementById('n-value').value);
+
+            if (!prompt.trim()) {
+                showError('Please enter a prompt');
+                return;
+            }
+
+            const btn = document.getElementById('start-btn');
+            btn.disabled = true;
+            btn.textContent = 'LOADING...';
+
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = '<div class="loading-text">Building token tree...</div>';
+
+            try {
+                const response = await fetch('/api/beam-tree', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt, k, n })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to generate tree');
+                }
+
+                treeData = data;
+                initialK = k;
+                initialN = n;
+                startGame();
+
+            } catch (error) {
+                showError(error.message);
+                btn.disabled = false;
+                btn.textContent = 'START';
+            }
+        }
+
+        function showError(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        function startGame() {
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('game-container').classList.add('active');
+            currentPath = [];
+            currentIndex = 0;
+            selectedPaths = [];
+            loadedDepths = new Set(); // Reset loaded depths
+            renderLevels();
+            updatePathDisplay();
+        }
+
+        function getCurrentNodes() {
+            let nodes = treeData.children;
+            for (const selection of currentPath) {
+                nodes = nodes[selection.index].children;
+                if (!nodes) break;
+            }
+            return nodes || [];
+        }
+
+        function renderLevels() {
+            const container = document.getElementById('levels-container');
+            container.innerHTML = '';
+
+            // First, navigate to the current position in the tree based on currentPath
+            let nodes = treeData.children;
+            for (const selection of currentPath) {
+                if (!nodes || !nodes[selection.index]) return;
+                nodes = nodes[selection.index].children;
+            }
+
+            // Now show current level and up to 4 levels ahead from this position
+            if (!nodes || nodes.length === 0) return;
+
+            let depthPath = [...currentPath]; // Track path as we go deeper
+            let lastRenderedNodes = null;
+            let lastDepthPath = null;
+
+            for (let depth = 0; depth < 5; depth++) {
+                if (!nodes || nodes.length === 0) break;
+
+                const levelDiv = document.createElement('div');
+                levelDiv.className = `level-container level-${depth}`;
+
+                const carousel = document.createElement('div');
+                carousel.className = 'carousel';
+
+                const selectedIdx = depth === 0 ? currentIndex : 0;
+
+                nodes.forEach((node, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'token-card';
+
+                    if (depth === 0) {
+                        if (idx === currentIndex) {
+                            card.classList.add('active');
+                        } else {
+                            card.classList.add('dimmed');
+                        }
+                    } else {
+                        // Background layers - all get dimmed class
+                        card.classList.add('dimmed');
+                    }
+
+                    const tokenText = document.createElement('div');
+                    tokenText.className = 'token-text';
+                    tokenText.textContent = node.token_str.replace(/\n/g, '↵').replace(/\t/g, '→');
+
+                    const probText = document.createElement('div');
+                    probText.className = 'token-prob';
+                    probText.textContent = `${(node.probability * 100).toFixed(1)}%`;
+
+                    const cumulativeText = document.createElement('div');
+                    cumulativeText.className = 'cumulative-prob';
+                    cumulativeText.textContent = `Σ ${(node.cumulative_prob * 100).toFixed(3)}%`;
+
+                    card.appendChild(tokenText);
+                    card.appendChild(probText);
+                    card.appendChild(cumulativeText);
+
+                    if (depth === 0) {
+                        card.addEventListener('click', () => {
+                            currentIndex = idx;
+                            renderLevels();
+                            updatePathDisplay();
+                        });
+                    }
+
+                    carousel.appendChild(card);
+                });
+
+                levelDiv.appendChild(carousel);
+                container.appendChild(levelDiv);
+
+                lastRenderedNodes = nodes;
+                lastDepthPath = depthPath;
+
+                // Move to children of selected node for next level
+                if (!nodes[selectedIdx] || !nodes[selectedIdx].children) {
+                    // We've reached the edge - check if we need to load
+                    const pathKey = depthPath.map(p => p.token_id).join(',');
+                    if (!loadedDepths.has(pathKey) && lastRenderedNodes) {
+                        loadedDepths.add(pathKey);
+                        loadNextLayer(lastRenderedNodes, lastDepthPath);
+                    }
+                    break;
+                }
+
+                // Update path for next iteration
+                if (depth === 0) {
+                    depthPath = [...currentPath, { token_id: nodes[selectedIdx].token_id, index: selectedIdx }];
+                } else {
+                    depthPath = [...depthPath, { token_id: nodes[selectedIdx].token_id, index: selectedIdx }];
+                }
+
+                nodes = nodes[selectedIdx].children;
+            }
+
+            updateDepth();
+        }
+
+        function updatePathDisplay() {
+            const pathText = document.getElementById('path-text');
+            const fullPath = getCurrentFullPath();
+            pathText.textContent = fullPath || '(start)';
+        }
+
+        function getCurrentFullPath() {
+            let path = treeData.prompt;
+            let nodes = treeData.children;
+
+            for (const selection of currentPath) {
+                if (!nodes || !nodes[selection.index]) break;
+                path += nodes[selection.index].token_str;
+                nodes = nodes[selection.index].children;
+            }
+
+            // Add current selection
+            const currentNodes = getCurrentNodes();
+            if (currentNodes && currentNodes[currentIndex]) {
+                path += currentNodes[currentIndex].token_str;
+            }
+
+            return path;
+        }
+
+        function updateDepth() {
+            document.getElementById('depth-value').textContent = currentPath.length;
+        }
+
+        function selectAndAdvance() {
+            const currentNodes = getCurrentNodes();
+            if (!currentNodes || currentNodes.length === 0) return;
+            if (currentIndex >= currentNodes.length) return;
+
+            const selected = currentNodes[currentIndex];
+            if (!selected.children || selected.children.length === 0) {
+                // At a leaf node
+                return;
+            }
+
+            currentPath.push({
+                index: currentIndex,
+                token: selected.token_str,
+                probability: selected.probability,
+                token_id: selected.token_id
+            });
+
+            currentIndex = 0;
+            renderLevels();
+            updatePathDisplay();
+        }
+
+        function goBack() {
+            if (currentPath.length === 0) return;
+
+            const last = currentPath.pop();
+            currentIndex = last.index;
+            renderLevels();
+            updatePathDisplay();
+        }
+
+        async function loadNextLayer(nodes, pathToNodes) {
+            try {
+                // Collect all nodes that need children loaded
+                const nodesToExpand = nodes.map(node => ({
+                    path: pathToNodes.map(p => p.token_id),
+                    token_id: node.token_id
+                }));
+
+                const response = await fetch('/api/expand-depth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: treeData.prompt,
+                        nodes: nodesToExpand,
+                        k: initialK
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    console.error('Failed to load depth:', data.error);
+                    return;
+                }
+
+                // Merge children into the tree silently
+                const childrenMap = data.children_map;
+
+                for (const node of nodes) {
+                    const pathKey = [...pathToNodes.map(p => p.token_id), node.token_id].join(',');
+                    if (childrenMap[pathKey]) {
+                        node.children = childrenMap[pathKey];
+                    }
+                }
+
+                // Don't re-render - let the next navigation show the loaded content
+                // This prevents the jarring re-render when navigating
+            } catch (error) {
+                console.error('Error loading depth:', error);
+            }
+        }
+
+        function markPath(type) {
+            const path = getCurrentFullPath();
+            selectedPaths.push({ type, path, timestamp: Date.now() });
+            updateSelectionsPanel();
+        }
+
+        function updateSelectionsPanel() {
+            const panel = document.getElementById('selections-panel');
+            const list = document.getElementById('selections-list');
+
+            if (selectedPaths.length === 0) {
+                panel.classList.remove('active');
+                return;
+            }
+
+            panel.classList.add('active');
+            list.innerHTML = '';
+
+            selectedPaths.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = `selection-item ${item.type}`;
+                div.innerHTML = `
+                    <strong>${item.type === 'positive' ? '✓ GOOD' : '✗ BAD'}</strong><br>
+                    ${item.path.substring(0, 50)}${item.path.length > 50 ? '...' : ''}
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function exportSelections() {
+            if (selectedPaths.length === 0) {
+                alert('No paths selected yet');
+                return;
+            }
+
+            const exportData = {
+                prompt: treeData.prompt,
+                paths: selectedPaths
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `dpo_paths_${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('loading-screen').classList.contains('hidden')) {
+                switch(e.key) {
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        const nodes = getCurrentNodes();
+                        if (nodes.length === 0) break;
+                        currentIndex = (currentIndex - 1 + nodes.length) % nodes.length;
+                        renderLevels();
+                        updatePathDisplay();
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        const nodesRight = getCurrentNodes();
+                        if (nodesRight.length === 0) break;
+                        currentIndex = (currentIndex + 1) % nodesRight.length;
+                        renderLevels();
+                        updatePathDisplay();
+                        break;
+                    case ' ':
+                        e.preventDefault();
+                        selectAndAdvance();
+                        break;
+                    case 'Backspace':
+                        e.preventDefault();
+                        goBack();
+                        break;
+                    case 'g':
+                    case 'G':
+                        markPath('positive');
+                        break;
+                    case 'b':
+                    case 'B':
+                        markPath('negative');
+                        break;
+                    case 'e':
+                    case 'E':
+                        exportSelections();
+                        break;
+                }
+            } else if (e.key === 'Enter') {
+                startDrive();
+            }
+        });
+
+        // Allow Enter to start
+        document.getElementById('prompt').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                startDrive();
+            }
+        });
+    </script>
+</body>
+</html>
