@@ -123,99 +123,79 @@ def beam_tree():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/expand-node", methods=["POST"])
-def expand_node():
+@app.route("/api/expand-depth", methods=["POST"])
+def expand_depth():
     """
-    Get additional top-k tokens for a specific position in the tree.
+    Extend the tree depth by one layer for specific nodes.
 
     Expects JSON: {
         "prompt": str,
-        "path": [token_id, token_id, ...],  # path to current position
-        "current_k": int,  # how many we already have
-        "additional_k": int,  # how many more to fetch
-        "n": int  # depth to expand
+        "nodes": [
+            {
+                "path": [token_id, ...],  # path to this node
+                "token_id": int  # the node itself
+            },
+            ...
+        ],
+        "k": int  # how many children to generate per node
     }
-    Returns: Additional tokens with their children
+    Returns: Map of node paths to their children
     """
     data = request.json
     prompt = data.get("prompt", "").strip()
-    path = data.get("path", [])
-    current_k = data.get("current_k", 0)
-    additional_k = data.get("additional_k", 5)
-    n = data.get("n", 5)
+    nodes_to_expand = data.get("nodes", [])
+    k = data.get("k", 5)
 
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
 
     try:
-        # Build token sequence by following the path (prompt already has special tokens)
-        tokens = model.tokenizer.encode(prompt)
-        if len(tokens) > model.context_length:
-            tokens = tokens[-model.context_length :]
+        result = {}
 
-        # Add path tokens
-        for token_id in path:
-            tokens.append(token_id)
+        for node_info in nodes_to_expand:
+            path = node_info["path"]
+            node_token_id = node_info["token_id"]
+
+            # Build token sequence by following the path
+            tokens = model.tokenizer.encode(prompt)
             if len(tokens) > model.context_length:
                 tokens = tokens[-model.context_length :]
 
-        tokens_tensor = torch.tensor([tokens], device=model.device, dtype=torch.long)
+            # Add path tokens + this node's token
+            for token_id in path:
+                tokens.append(token_id)
+                if len(tokens) > model.context_length:
+                    tokens = tokens[-model.context_length :]
 
-        # Get top (current_k + additional_k) tokens
-        total_k = current_k + additional_k
-        top_tokens = model.get_top_k_tokens(tokens_tensor, k=total_k)
+            tokens.append(node_token_id)
+            if len(tokens) > model.context_length:
+                tokens = tokens[-model.context_length :]
 
-        # Return only the new tokens (skip the first current_k)
-        new_tokens = top_tokens[current_k:]
-
-        # Build tree for these new tokens
-        result = []
-        for token_id, token_str, probability in new_tokens:
-            new_token = torch.tensor([[token_id]], device=model.device)
-            if tokens_tensor.size(1) >= model.context_length:
-                new_tokens_tensor = torch.cat([tokens_tensor[:, 1:], new_token], dim=1)
-            else:
-                new_tokens_tensor = torch.cat([tokens_tensor, new_token], dim=1)
-
-            # Build children recursively
-            def build_children(tensor, depth, cumulative_prob):
-                if depth >= n:
-                    return None
-                top_k = model.get_top_k_tokens(tensor, k=current_k + additional_k)
-                children = []
-                for tid, tstr, prob in top_k:
-                    nt = torch.tensor([[tid]], device=model.device)
-                    if tensor.size(1) >= model.context_length:
-                        next_tensor = torch.cat([tensor[:, 1:], nt], dim=1)
-                    else:
-                        next_tensor = torch.cat([tensor, nt], dim=1)
-
-                    children.append(
-                        {
-                            "token_id": tid,
-                            "token_str": tstr,
-                            "probability": prob,
-                            "cumulative_prob": cumulative_prob * prob,
-                            "depth": depth,
-                            "children": build_children(
-                                next_tensor, depth + 1, cumulative_prob * prob
-                            ),
-                        }
-                    )
-                return children if children else None
-
-            result.append(
-                {
-                    "token_id": token_id,
-                    "token_str": token_str,
-                    "probability": probability,
-                    "cumulative_prob": probability,
-                    "depth": 0,
-                    "children": build_children(new_tokens_tensor, 1, probability),
-                }
+            tokens_tensor = torch.tensor(
+                [tokens], device=model.device, dtype=torch.long
             )
 
-        return jsonify({"new_tokens": result})
+            # Get top k tokens for this node
+            top_tokens = model.get_top_k_tokens(tokens_tensor, k=k)
+
+            children = []
+            for token_id, token_str, probability in top_tokens:
+                children.append(
+                    {
+                        "token_id": token_id,
+                        "token_str": token_str,
+                        "probability": probability,
+                        "cumulative_prob": probability,  # Will be updated by frontend
+                        "depth": 0,  # Will be updated by frontend
+                        "children": None,  # Will be loaded lazily
+                    }
+                )
+
+            # Use path + node_token_id as key
+            path_key = ",".join(map(str, path + [node_token_id]))
+            result[path_key] = children
+
+        return jsonify({"children_map": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
