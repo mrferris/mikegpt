@@ -55,8 +55,22 @@ class Model:
             [tokens], device=self.device, dtype=torch.long
         )
 
-    def next_token(self, temperature: float = 1.0, top_k: int = 5) -> str:
-        """Fast next-token generation (proper top-k sampling with temperature)."""
+    def next_token(
+        self,
+        temperature: float = 1.0,
+        top_p: float = 0.45,
+        top_k: int = 5,
+        use_top_k: bool = False,
+    ) -> str:
+        """
+        Fast next-token generation with temperature and top-p or top-k sampling.
+
+        Args:
+            temperature: Temperature for scaling logits (higher = more random)
+            top_p: Nucleus sampling threshold (used when use_top_k=False)
+            top_k: Number of top tokens to sample from (used when use_top_k=True)
+            use_top_k: If True, use top-k sampling; if False, use top-p sampling (default)
+        """
         if self.current_tokens is None:
             raise RuntimeError("Must call .prime(prompt) before .next_token()")
 
@@ -65,13 +79,36 @@ class Model:
             last_logits = logits[0, -1] / temperature  # apply temperature
             probs = F.softmax(last_logits, dim=-1)
 
-            # Take top-k tokens
-            top_probs, top_idx = torch.topk(probs, k=top_k)
-            top_probs = top_probs / top_probs.sum()  # renormalize to sum to 1
+            if use_top_k:
+                # Top-k sampling
+                top_probs, top_idx = torch.topk(probs, k=top_k)
+                top_probs = top_probs / top_probs.sum()  # renormalize to sum to 1
 
-            # Sample one token from the top-k distribution
-            choice = torch.multinomial(top_probs, 1)
-            chosen_id = int(top_idx[choice].item())
+                # Sample one token from the top-k distribution
+                choice = torch.multinomial(top_probs, 1)
+                chosen_id = int(top_idx[choice].item())
+            else:
+                # Top-p (nucleus) sampling
+                # Sort probabilities in descending order
+                sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+
+                # Compute cumulative probabilities
+                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+                # Find the cutoff index where cumulative probability exceeds top_p
+                # Keep at least one token
+                cutoff_index = torch.searchsorted(cumulative_probs, top_p) + 1
+
+                # Select tokens up to cutoff
+                nucleus_probs = sorted_probs[:cutoff_index]
+                nucleus_indices = sorted_indices[:cutoff_index]
+
+                # Renormalize to sum to 1
+                nucleus_probs = nucleus_probs / nucleus_probs.sum()
+
+                # Sample one token from the nucleus distribution
+                choice = torch.multinomial(nucleus_probs, 1)
+                chosen_id = int(nucleus_indices[choice].item())
 
         # Append new token on GPU, cropping if needed
         new_token = torch.tensor([[chosen_id]], device=self.device)
