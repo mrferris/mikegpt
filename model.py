@@ -2,11 +2,11 @@ import sys
 from pathlib import Path
 
 # Add sibling repo to Python path
-sys.path.append(str(Path(__file__).resolve().parents[1] / "cs336/assignment1-basics/"))
+sys.path.append(str(Path(__file__).resolve().parents[1] / "artisinal-lm"))
 
-from cs336_basics.model.transformer import TransformerLM
-from cs336_basics.training.checkpointing import load_checkpoint
-from cs336_basics.tokenization.bpe import Tokenizer
+from lm.model.transformer import TransformerLM
+from lm.training.utils.checkpointing import load_checkpoint
+from lm.tokenization.bpe import Tokenizer
 import torch
 import torch.nn.functional as F
 
@@ -40,8 +40,8 @@ class Model:
         load_checkpoint(checkpoint_path, self.model, None)
 
         self.tokenizer = Tokenizer.from_files(
-            "../cs336/assignment1-basics/cs336_basics/output/openwebtext_vocab.json",
-            "../cs336/assignment1-basics/cs336_basics/output/openwebtext_merges.pkl",
+            "vocab/mikegpt_vocab.json",
+            "vocab/mikegpt_merges.pkl",
         )
 
         self.current_tokens = None  # running token buffer on device
