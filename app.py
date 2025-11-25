@@ -200,6 +200,55 @@ def expand_depth():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/train", methods=["POST"])
+def train():
+    """
+    Train the model using DPO with positive and negative token ID sequences.
+
+    Expects JSON:
+    {
+        "prompt": str,
+        "positive_token_ids": [[int, ...], ...],  # Token ID sequences (continuations only)
+        "negative_token_ids": [[int, ...], ...]   # Token ID sequences (continuations only)
+    }
+    """
+    data = request.json
+    prompt_text = data.get("prompt", "")
+    positive_token_ids = data.get("positive_token_ids", [])
+    negative_token_ids = data.get("negative_token_ids", [])
+
+    if not prompt_text or not positive_token_ids or not negative_token_ids:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        # Tokenize the prompt (this is the shared context)
+        prompt_tokens = model.tokenizer.encode(prompt_text)
+
+        # Use the first positive and first negative token sequence for this training step
+        # The token IDs from the frontend are already the continuation only (not including prompt)
+        positive_continuation = positive_token_ids[0]
+        negative_continuation = negative_token_ids[0]
+
+        # Call the DPO training step
+        model.do_dpo_step(
+            prompt=prompt_tokens,
+            positive=positive_continuation,
+            negative=negative_continuation
+        )
+
+        return jsonify({
+            "success": True,
+            "prompt_length": len(prompt_tokens),
+            "positive_length": len(positive_continuation),
+            "negative_length": len(negative_continuation),
+            "num_positive_paths": len(positive_token_ids),
+            "num_negative_paths": len(negative_token_ids)
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")

@@ -753,8 +753,29 @@
 
         function markPath(type) {
             const path = getCurrentFullPath();
-            selectedPaths.push({ type, path, timestamp: Date.now() });
+            const tokenIds = getCurrentTokenIds();
+            selectedPaths.push({ type, path, token_ids: tokenIds, timestamp: Date.now() });
             updateSelectionsPanel();
+        }
+
+        function getCurrentTokenIds() {
+            // Collect the token IDs from the current path
+            let tokenIds = [];
+            let nodes = treeData.children;
+
+            for (const selection of currentPath) {
+                if (!nodes || !nodes[selection.index]) break;
+                tokenIds.push(nodes[selection.index].token_id);
+                nodes = nodes[selection.index].children;
+            }
+
+            // Add current selection
+            const currentNodes = getCurrentNodes();
+            if (currentNodes && currentNodes[currentIndex]) {
+                tokenIds.push(currentNodes[currentIndex].token_id);
+            }
+
+            return tokenIds;
         }
 
         function updateSelectionsPanel() {
@@ -780,24 +801,49 @@
             });
         }
 
-        function exportSelections() {
+        async function exportSelections() {
             if (selectedPaths.length === 0) {
                 alert('No paths selected yet');
                 return;
             }
 
-            const exportData = {
-                prompt: treeData.prompt,
-                paths: selectedPaths
-            };
+            // Separate positive and negative token ID sequences
+            const positiveTokenIds = selectedPaths.filter(p => p.type === 'positive').map(p => p.token_ids);
+            const negativeTokenIds = selectedPaths.filter(p => p.type === 'negative').map(p => p.token_ids);
 
-            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `dpo_paths_${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            if (positiveTokenIds.length === 0 || negativeTokenIds.length === 0) {
+                alert('Need at least one positive and one negative path');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/train', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: treeData.prompt,
+                        positive_token_ids: positiveTokenIds,
+                        negative_token_ids: negativeTokenIds
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Training failed');
+                }
+
+                alert(`Training step completed!\nPositive paths: ${positiveTokenIds.length}\nNegative paths: ${negativeTokenIds.length}`);
+
+                // Clear selections after successful training
+                selectedPaths = [];
+                updateSelectionsPanel();
+
+            } catch (error) {
+                alert('Training error: ' + error.message);
+            }
         }
 
         // Keyboard controls
