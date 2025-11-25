@@ -123,7 +123,7 @@ class Model:
 
         return self.tokenizer.decode([chosen_id])
 
-    def get_top_k_tokens(self, tokens_tensor, k: int = 20):
+    def get_top_k_tokens(self, tokens_tensor, k: int = 20, temperature: float = 1.0):
         """
         Get top K tokens and their probabilities for a given token sequence.
         Does not modify model state.
@@ -137,7 +137,7 @@ class Model:
         """
         with torch.no_grad():
             logits = self.model(tokens_tensor)
-            last_logits = logits[0, -1]
+            last_logits = logits[0, -1] / temperature
             probs = F.softmax(last_logits, dim=-1)
 
             top_probs, top_idx = torch.topk(probs, k=k)
@@ -236,7 +236,7 @@ class Model:
         generated_any = False
 
         for _ in range(max_tokens):
-            token = self.next_token()
+            token = self.next_token(use_top_k=True, top_k=5)
             print(token)
 
             # 2. Handle special tokens
