@@ -4,7 +4,7 @@ from pathlib import Path
 # Add sibling repo to Python path
 sys.path.append(str(Path(__file__).resolve().parents[1] / "artisinal-lm"))
 
-from lm.model.transformer import TransformerLM
+from lm.model.model import TransformerLM, TrainableModel
 from lm.training.utils.checkpointing import load_checkpoint
 from lm.tokenization.bpe import Tokenizer
 import torch
@@ -38,6 +38,8 @@ class Model:
         )
 
         load_checkpoint(checkpoint_path, self.model, None)
+
+        self.trainable_model = TrainableModel(model=self.model)
 
         self.tokenizer = Tokenizer.from_files(
             "vocab/mikegpt_vocab.json",
@@ -271,3 +273,6 @@ class Model:
         # If no responses, retry
         if not generated_any:
             yield from self.generate_response_stream(conversation_history, user_message)
+
+    def do_dpo_step(self, prompt: list[int], positive: list[int], negative: list[int]):
+        self.trainable_model.do_simpo_step(prompt, positive, negative)
