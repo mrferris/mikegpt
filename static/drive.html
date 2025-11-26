@@ -835,7 +835,7 @@
                     throw new Error(result.error || 'Training failed');
                 }
 
-                alert(`Training step completed!\nPositive paths: ${positiveTokenIds.length}\nNegative paths: ${negativeTokenIds.length}`);
+                alert(`Positive change: ${result.positive_change_percent} Negative change: ${result.negative_change_percent} `);
 
                 // Clear selections after successful training
                 selectedPaths = [];

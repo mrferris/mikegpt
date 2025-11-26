@@ -274,5 +274,11 @@ class Model:
         if not generated_any:
             yield from self.generate_response_stream(conversation_history, user_message)
 
-    def do_dpo_step(self, prompt: list[int], positive: list[int], negative: list[int]):
-        self.trainable_model.do_simpo_step(prompt, positive, negative)
+    def do_dpo_step(
+        self, prompt: list[int], positive: list[int], negative: list[int]
+    ) -> tuple[float]:
+        """
+        returns a tuple containing the change in probablities for the
+        positive and negative responses, respectively.
+        """
+        return self.trainable_model.do_simpo_step(prompt, positive, negative)

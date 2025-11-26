@@ -230,20 +230,24 @@ def train():
         negative_continuation = negative_token_ids[0]
 
         # Call the DPO training step
-        model.do_dpo_step(
+        probability_changes = model.do_dpo_step(
             prompt=prompt_tokens,
             positive=positive_continuation,
-            negative=negative_continuation
+            negative=negative_continuation,
         )
 
-        return jsonify({
-            "success": True,
-            "prompt_length": len(prompt_tokens),
-            "positive_length": len(positive_continuation),
-            "negative_length": len(negative_continuation),
-            "num_positive_paths": len(positive_token_ids),
-            "num_negative_paths": len(negative_token_ids)
-        })
+        return jsonify(
+            {
+                "success": True,
+                "prompt_length": len(prompt_tokens),
+                "positive_length": len(positive_continuation),
+                "negative_length": len(negative_continuation),
+                "num_positive_paths": len(positive_token_ids),
+                "num_negative_paths": len(negative_token_ids),
+                "positive_change_percent": probability_changes[0],
+                "negative_change_percent": probability_changes[1],
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
