@@ -237,13 +237,29 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 12px;
             padding: 20px;
-            max-width: 400px;
+            max-width: 500px;
             backdrop-filter: blur(10px);
             z-index: 200;
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
         }
 
         .path-display.hidden {
             display: none;
+        }
+
+        .path-section {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .depth-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 60px;
+            flex-shrink: 0;
         }
 
         .path-title {
@@ -258,20 +274,6 @@
             font-size: 16px;
             line-height: 1.5;
             word-wrap: break-word;
-        }
-
-        .depth-indicator {
-            position: fixed;
-            top: 30px;
-            right: 30px;
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            padding: 20px;
-            backdrop-filter: blur(10px);
-            z-index: 200;
-            text-align: center;
-            min-width: 100px;
         }
 
         .depth-label {
@@ -357,23 +359,60 @@
 
         .selections-panel {
             position: fixed;
-            top: 50%;
+            top: 30px;
             right: 30px;
-            transform: translateY(-50%);
             background: rgba(0, 0, 0, 0.9);
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 12px;
             padding: 20px;
-            max-width: 300px;
-            max-height: 60vh;
+            min-width: 250px;
+            max-width: 350px;
+            max-height: 70vh;
             overflow-y: auto;
             backdrop-filter: blur(10px);
             z-index: 200;
-            display: none;
         }
 
-        .selections-panel.active {
-            display: block;
+        .panel-title {
+            color: #999;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .selections-list {
+            margin-bottom: 15px;
+        }
+
+        .selection-placeholder {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 6px;
+            font-size: 13px;
+            color: #555;
+            border-left: 3px solid #333;
+        }
+
+        .execute-hint {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            color: #999;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.5s ease 0.5s;
+        }
+
+        .execute-hint.show {
+            display: flex;
+            opacity: 1;
         }
 
         .selection-item {
@@ -387,6 +426,97 @@
 
         .selection-item.negative {
             border-left-color: #f00;
+        }
+
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            padding: 10px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 10px;
+            user-select: none;
+        }
+
+        .history-header:hover {
+            color: #fff;
+        }
+
+        .history-title {
+            color: #999;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .dropdown-arrow {
+            transition: transform 0.3s;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .dropdown-arrow.open {
+            transform: rotate(-90deg);
+        }
+
+        .history-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .history-list.open {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            font-size: 12px;
+            border-left: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .history-timestamp {
+            color: #666;
+            font-size: 10px;
+            margin-bottom: 8px;
+        }
+
+        .history-paths {
+            margin: 8px 0;
+            font-size: 11px;
+            color: #888;
+            line-height: 1.4;
+        }
+
+        .history-path-label {
+            color: #666;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .history-changes {
+            display: flex;
+            gap: 15px;
+            margin-top: 8px;
+        }
+
+        .prob-change {
+            font-size: 13px;
+            font-weight: 600;
+            font-family: monospace;
+        }
+
+        .prob-positive {
+            color: #0f0;
+        }
+
+        .prob-negative {
+            color: #f00;
         }
 
         @keyframes pulse {
@@ -422,13 +552,14 @@
         <div class="title">MikeRL</div>
 
         <div class="path-display" id="path-display">
-            <div class="path-title">Current Path</div>
-            <div class="path-text" id="path-text"></div>
-        </div>
-
-        <div class="depth-indicator">
-            <div class="depth-label">Depth</div>
-            <div class="depth-value" id="depth-value">0</div>
+            <div class="depth-section">
+                <div class="depth-label">Depth</div>
+                <div class="depth-value" id="depth-value">0</div>
+            </div>
+            <div class="path-section">
+                <div class="path-title">Current Path</div>
+                <div class="path-text" id="path-text"></div>
+            </div>
         </div>
 
         <div id="levels-container"></div>
@@ -462,8 +593,20 @@
         </div>
 
         <div class="selections-panel" id="selections-panel">
-            <div class="path-title">Selected Paths</div>
-            <div id="selections-list"></div>
+            <div class="panel-title">Selected Paths</div>
+            <div class="selections-list" id="selections-list">
+                <div class="selection-placeholder">No positive example selected</div>
+                <div class="selection-placeholder">No negative example selected</div>
+            </div>
+            <div class="execute-hint" id="execute-hint">
+                <span class="key">E</span>
+                <span>Execute training</span>
+            </div>
+            <div class="history-header" id="history-header" style="display: none;">
+                <div class="history-title">Training History</div>
+                <div class="dropdown-arrow" id="dropdown-arrow">◀</div>
+            </div>
+            <div class="history-list" id="history-list"></div>
         </div>
     </div>
 
@@ -472,6 +615,7 @@
         let currentPath = [];
         let currentIndex = 0;
         let selectedPaths = [];
+        let trainingHistory = [];
         let initialK = 5; // Initial K value
         let initialN = 5; // Initial N value
         let loadedDepths = new Set(); // Track which depth layers we've already loaded
@@ -779,27 +923,129 @@
         }
 
         function updateSelectionsPanel() {
-            const panel = document.getElementById('selections-panel');
-            const list = document.getElementById('selections-list');
+            const selectionsList = document.getElementById('selections-list');
+            const executeHint = document.getElementById('execute-hint');
 
-            if (selectedPaths.length === 0) {
-                panel.classList.remove('active');
+            const positiveItems = selectedPaths.filter(p => p.type === 'positive');
+            const negativeItems = selectedPaths.filter(p => p.type === 'negative');
+
+            // Show execute hint if both positive and negative are selected
+            if (positiveItems.length > 0 && negativeItems.length > 0) {
+                executeHint.classList.add('show');
+            } else {
+                executeHint.classList.remove('show');
+            }
+
+            // Show selected paths or placeholders
+            selectionsList.innerHTML = '';
+
+            // Positive section
+            if (positiveItems.length > 0) {
+                positiveItems.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'selection-item positive';
+                    div.innerHTML = `
+                        <strong>✓ GOOD</strong><br>
+                        ${item.path.substring(0, 50)}${item.path.length > 50 ? '...' : ''}
+                    `;
+                    selectionsList.appendChild(div);
+                });
+            } else {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'selection-placeholder';
+                placeholder.textContent = 'No positive example selected';
+                selectionsList.appendChild(placeholder);
+            }
+
+            // Negative section
+            if (negativeItems.length > 0) {
+                negativeItems.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'selection-item negative';
+                    div.innerHTML = `
+                        <strong>✗ BAD</strong><br>
+                        ${item.path.substring(0, 50)}${item.path.length > 50 ? '...' : ''}
+                    `;
+                    selectionsList.appendChild(div);
+                });
+            } else {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'selection-placeholder';
+                placeholder.textContent = 'No negative example selected';
+                selectionsList.appendChild(placeholder);
+            }
+        }
+
+        function formatPercent(value) {
+            // For very small values, show more precision
+            if (Math.abs(value) < 0.01 && value !== 0) {
+                // Find how many decimal places we need
+                let formatted = value.toFixed(6);
+                // Remove trailing zeros
+                formatted = formatted.replace(/\.?0+$/, '');
+                return formatted;
+            }
+            return value.toFixed(2);
+        }
+
+        function updateTrainingHistory() {
+            const historyHeader = document.getElementById('history-header');
+            const historyList = document.getElementById('history-list');
+
+            if (trainingHistory.length === 0) {
+                historyHeader.style.display = 'none';
                 return;
             }
 
-            panel.classList.add('active');
-            list.innerHTML = '';
+            historyHeader.style.display = 'flex';
+            historyList.innerHTML = '';
 
-            selectedPaths.forEach((item, idx) => {
+            trainingHistory.slice().reverse().forEach((item, idx) => {
                 const div = document.createElement('div');
-                div.className = `selection-item ${item.type}`;
+                div.className = 'history-item';
+
+                const timestamp = new Date(item.timestamp).toLocaleTimeString();
+
+                let pathsHtml = '<div class="history-paths">';
+                if (item.positivePaths && item.positivePaths.length > 0) {
+                    pathsHtml += `<div class="history-path-label">✓ Positive:</div>`;
+                    item.positivePaths.forEach(path => {
+                        const truncated = path.length > 60 ? path.substring(0, 60) + '...' : path;
+                        pathsHtml += `<div>${truncated}</div>`;
+                    });
+                }
+                if (item.negativePaths && item.negativePaths.length > 0) {
+                    pathsHtml += `<div class="history-path-label">✗ Negative:</div>`;
+                    item.negativePaths.forEach(path => {
+                        const truncated = path.length > 60 ? path.substring(0, 60) + '...' : path;
+                        pathsHtml += `<div>${truncated}</div>`;
+                    });
+                }
+                pathsHtml += '</div>';
+
                 div.innerHTML = `
-                    <strong>${item.type === 'positive' ? '✓ GOOD' : '✗ BAD'}</strong><br>
-                    ${item.path.substring(0, 50)}${item.path.length > 50 ? '...' : ''}
+                    <div class="history-timestamp">#${trainingHistory.length - idx} - ${timestamp}</div>
+                    ${pathsHtml}
+                    <div class="history-changes">
+                        <div class="prob-change prob-positive">+${formatPercent(item.positiveChange)}%</div>
+                        <div class="prob-change prob-negative">${formatPercent(item.negativeChange)}%</div>
+                    </div>
                 `;
-                list.appendChild(div);
+                historyList.appendChild(div);
             });
         }
+
+        // Toggle history dropdown
+        document.addEventListener('DOMContentLoaded', () => {
+            const historyHeader = document.getElementById('history-header');
+            const historyList = document.getElementById('history-list');
+            const dropdownArrow = document.getElementById('dropdown-arrow');
+
+            historyHeader.addEventListener('click', () => {
+                historyList.classList.toggle('open');
+                dropdownArrow.classList.toggle('open');
+            });
+        });
 
         async function exportSelections() {
             if (selectedPaths.length === 0) {
@@ -835,7 +1081,20 @@
                     throw new Error(result.error || 'Training failed');
                 }
 
-                alert(`Positive change: ${result.positive_change_percent} Negative change: ${result.negative_change_percent} `);
+                // Add to training history
+                const positivePaths = selectedPaths.filter(p => p.type === 'positive').map(p => p.path);
+                const negativePaths = selectedPaths.filter(p => p.type === 'negative').map(p => p.path);
+
+                trainingHistory.push({
+                    timestamp: Date.now(),
+                    positiveChange: result.positive_change_percent,
+                    negativeChange: result.negative_change_percent,
+                    positivePaths: positivePaths,
+                    negativePaths: negativePaths
+                });
+
+                // Update displays
+                updateTrainingHistory();
 
                 // Clear selections after successful training
                 selectedPaths = [];
