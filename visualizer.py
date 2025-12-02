@@ -138,6 +138,11 @@ def get_conversation_data():
     merged_conversations = list(contact_map.values())
     merged_conversations.sort(key=lambda x: x['messageCount'], reverse=True)
 
+    # Calculate total messages and add percentage to each conversation
+    total_messages = sum(conv['messageCount'] for conv in merged_conversations)
+    for conv in merged_conversations:
+        conv['percentage'] = (conv['messageCount'] / total_messages * 100) if total_messages > 0 else 0
+
     return {'conversations': merged_conversations, 'messages': all_messages}
 
 @app.route('/')

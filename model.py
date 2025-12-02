@@ -278,7 +278,7 @@ class Model:
         self, prompt: list[int], positive: list[int], negative: list[int]
     ) -> tuple[float]:
         """
-        returns a tuple containing the change in probablities for the
+        Returns a tuple containing the change in probablities for the
         positive and negative responses, respectively.
         """
         return self.trainable_model.do_simpo_step(prompt, positive, negative)

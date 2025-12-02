@@ -437,7 +437,7 @@
                     tooltip.classed('show', true)
                         .html(`
                             <div class="tooltip-contact">${d.contact}</div>
-                            <div class="tooltip-stat">📊 ${d.messageCount.toLocaleString()} messages</div>
+                            <div class="tooltip-stat">📊 ${d.messageCount.toLocaleString()} messages (${d.percentage.toFixed(2)}%)</div>
                             <div class="tooltip-stat">📤 ${d.sentCount.toLocaleString()} sent</div>
                             <div class="tooltip-stat">📥 ${d.receivedCount.toLocaleString()} received</div>
                             <div class="tooltip-stat">📅 ${d3.timeFormat('%b %d, %Y')(d.firstMessageDate)} - ${d3.timeFormat('%b %d, %Y')(d.lastMessageDate)}</div>

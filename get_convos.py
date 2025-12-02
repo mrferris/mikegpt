@@ -3,9 +3,12 @@ import sqlite3
 import os
 import re
 import string
+import argparse
 
-DB_PATH = os.path.expanduser("~/Library/Messages/chat.db")
 OUTPUT_FILE = "imessages_dataset.txt"
+
+# Global variable to store database paths
+DB_PATHS = []
 
 # Patterns
 REACTION_PATTERNS = re.compile(r'^(Loved|Liked|Laughed at|Disliked|Emphasized) ', re.DOTALL)
@@ -58,82 +61,95 @@ def extract_text(row_text, row_attributed):
         return None
 
 def fetch_conversations():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    # Only 1-on-1 chats (not group chats)
-    cursor.execute("""
-        SELECT chat.ROWID
-        FROM chat
-        JOIN chat_handle_join chj ON chat.ROWID = chj.chat_id
-        GROUP BY chat.ROWID
-        HAVING COUNT(chj.handle_id) = 1
-    """)
-    chat_ids = [row[0] for row in cursor.fetchall()]
-
+    """Fetch conversations from all databases and combine them."""
     all_convos = []
-    for chat_id in chat_ids:
-        cursor.execute("""
-            SELECT
-                message.ROWID,
-                datetime(message.date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch') as message_date,
-                handle.id as sender,
-                message.text,
-                message.attributedBody,
-                message.is_from_me
-            FROM chat_message_join cmj
-            JOIN message ON cmj.message_id = message.ROWID
-            LEFT JOIN handle ON message.handle_id = handle.ROWID
-            WHERE cmj.chat_id = ?
-            ORDER BY message_date ASC
-        """, (chat_id,))
-        messages = cursor.fetchall()
 
-        # Skip convos with yourself
-        if any(m[2] == SELF_ADDRESS for m in messages if m[2]):
+    for db_path in DB_PATHS:
+        if not os.path.exists(db_path):
+            print(f"Warning: Database not found: {db_path}")
             continue
 
-        # Apply filters
-        filtered = []
-        for rowid, date, sender, text, attrib, is_from_me in messages:
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
 
-            text = extract_text(text, attrib)
-            
-            if not text or not re.search(r"\S", text):
-                continue
-            if URL_PATTERN.search(text):
-                continue
+            # Only 1-on-1 chats (not group chats)
+            cursor.execute("""
+                SELECT chat.ROWID
+                FROM chat
+                JOIN chat_handle_join chj ON chat.ROWID = chj.chat_id
+                GROUP BY chat.ROWID
+                HAVING COUNT(chj.handle_id) = 1
+            """)
+            chat_ids = [row[0] for row in cursor.fetchall()]
 
-            # Handle reaction messages
-            reaction_match = REACTION_PATTERNS.match(text.strip())
-            if reaction_match:
-                if is_from_me:
-                    # Convert my reactions to tokens
-                    reaction_type = reaction_match.group(1)
-                    text = f"<|{reaction_type}|>"
-                else:
-                    # Skip their reactions
+            for chat_id in chat_ids:
+                cursor.execute("""
+                    SELECT
+                        message.ROWID,
+                        datetime(message.date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch') as message_date,
+                        handle.id as sender,
+                        message.text,
+                        message.attributedBody,
+                        message.is_from_me
+                    FROM chat_message_join cmj
+                    JOIN message ON cmj.message_id = message.ROWID
+                    LEFT JOIN handle ON message.handle_id = handle.ROWID
+                    WHERE cmj.chat_id = ?
+                    ORDER BY message_date ASC
+                """, (chat_id,))
+                messages = cursor.fetchall()
+
+                # Skip convos with yourself
+                if any(m[2] == SELF_ADDRESS for m in messages if m[2]):
                     continue
 
-            # Remove object replacement characters and other special chars
-            text = text.replace('\ufffc', '').strip()
-            if not text or not re.search(r"\S", text):
-                continue
+                # Apply filters
+                filtered = []
+                for rowid, date, sender, text, attrib, is_from_me in messages:
 
-            role = ME_PATTERN if is_from_me else THEM_PATTERN
-            filtered.append((role, text))
+                    text = extract_text(text, attrib)
 
-        if not filtered:
+                    if not text or not re.search(r"\S", text):
+                        continue
+                    if URL_PATTERN.search(text):
+                        continue
+
+                    # Handle reaction messages
+                    reaction_match = REACTION_PATTERNS.match(text.strip())
+                    if reaction_match:
+                        if is_from_me:
+                            # Convert my reactions to tokens
+                            reaction_type = reaction_match.group(1)
+                            text = f"<|{reaction_type}|>"
+                        else:
+                            # Skip their reactions
+                            continue
+
+                    # Remove object replacement characters and other special chars
+                    text = text.replace('\ufffc', '').strip()
+                    if not text or not re.search(r"\S", text):
+                        continue
+
+                    role = ME_PATTERN if is_from_me else THEM_PATTERN
+                    filtered.append((role, text))
+
+                if not filtered:
+                    continue
+
+                # Keep only convos where you appear at least once
+                roles = [r for r, _ in filtered]
+                if ME_PATTERN not in roles:
+                    continue
+
+                all_convos.append(filtered)
+
+            conn.close()
+
+        except Exception as e:
+            print(f"Error reading database {db_path}: {e}")
             continue
 
-        # Keep only convos where you appear at least once
-        roles = [r for r, _ in filtered]
-        if ME_PATTERN not in roles:
-            continue
-
-        all_convos.append(filtered)
-
-    conn.close()
     return all_convos
 
 
@@ -163,6 +179,23 @@ def write_dataset(conversations):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Extract conversations from one or more iMessage databases')
+    parser.add_argument('--db', action='append', dest='databases',
+                        help='Path to chat.db file (can be specified multiple times)',
+                        default=[])
+    args = parser.parse_args()
+
+    # If no databases specified, use default
+    if not args.databases:
+        default_db = os.path.expanduser("~/Library/Messages/chat.db")
+        DB_PATHS = [default_db]
+        print(f"📂 Using default database: {default_db}")
+    else:
+        DB_PATHS = [os.path.expanduser(db) for db in args.databases]
+        print(f"📂 Loading {len(DB_PATHS)} database(s):")
+        for db in DB_PATHS:
+            print(f"   - {db}")
+
     convos = fetch_conversations()
     print(f"✅ Found {len(convos)} conversations")
     write_dataset(convos)
