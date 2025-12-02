@@ -11,58 +11,65 @@ OUTPUT_FILE = "imessages_dataset.txt"
 DB_PATHS = []
 
 # Patterns
-REACTION_PATTERNS = re.compile(r'^(Loved|Liked|Laughed at|Disliked|Emphasized) ', re.DOTALL)
-URL_PATTERN = re.compile(r'https?://\S+')
+REACTION_PATTERNS = re.compile(
+    r"^(Loved|Liked|Laughed at|Disliked|Emphasized) ", re.DOTALL
+)
+URL_PATTERN = re.compile(r"https?://\S+")
 
-SELF_ADDRESS = "REPLACE"
+SELF_ADDRESS = "+17163594066"
 
 ME_PATTERN = "<|Me|>"
 THEM_PATTERN = "<|Them|>"
 
 PRINTABLE = set(string.printable)  # ascii letters, digits, punctuation, etc.
 
+
 def extract_text(row_text, row_attributed):
     """Get clean message text from iMessage DB row."""
     # First try the plain text field
     if row_text and row_text.strip():
         return row_text.strip()
-    
+
     if not row_attributed:
         return None
-    
+
     try:
         # Use PyObjC to properly deserialize the NSAttributedString
         from Foundation import NSData, NSKeyedUnarchiver
-        
+
         # Convert bytes to NSData
         ns_data = NSData.dataWithBytes_length_(row_attributed, len(row_attributed))
-        
+
         # Unarchive the attributed string
         unarchiver = NSKeyedUnarchiver.alloc().initForReadingWithData_(ns_data)
         unarchiver.setRequiresSecureCoding_(False)
         attributed_string = unarchiver.decodeObjectForKey_("root")
         unarchiver.finishDecoding()
-        
+
         if attributed_string is None:
             return None
-        
+
         # Get the plain string from the attributed string
         text = attributed_string.string()
-        
+
         if text:
             return text.strip()
-        
+
         return None
-        
+
     except Exception as e:
         # If PyObjC fails, print debug info and return None
         print(f"⚠️  Failed to extract attributed text: {e}")
-        print(f"   Raw bytes preview: {row_attributed[:100] if row_attributed else 'None'}")
+        print(
+            f"   Raw bytes preview: {row_attributed[:100] if row_attributed else 'None'}"
+        )
         return None
+
 
 def fetch_conversations():
     """Fetch conversations from all databases and combine them."""
-    all_convos = []
+    # Dictionary to store conversations by contact (phone number/email)
+    conversations_by_contact = {}
 
     for db_path in DB_PATHS:
         if not os.path.exists(db_path):
@@ -84,7 +91,8 @@ def fetch_conversations():
             chat_ids = [row[0] for row in cursor.fetchall()]
 
             for chat_id in chat_ids:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT
                         message.ROWID,
                         datetime(message.date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch') as message_date,
@@ -97,8 +105,20 @@ def fetch_conversations():
                     LEFT JOIN handle ON message.handle_id = handle.ROWID
                     WHERE cmj.chat_id = ?
                     ORDER BY message_date ASC
-                """, (chat_id,))
+                """,
+                    (chat_id,),
+                )
                 messages = cursor.fetchall()
+
+                # Get the contact identifier from the first message
+                contact_id = None
+                for _, _, sender, _, _, _ in messages:
+                    if sender and sender != SELF_ADDRESS:
+                        contact_id = sender
+                        break
+
+                if not contact_id:
+                    continue
 
                 # Skip convos with yourself
                 if any(m[2] == SELF_ADDRESS for m in messages if m[2]):
@@ -107,7 +127,6 @@ def fetch_conversations():
                 # Apply filters
                 filtered = []
                 for rowid, date, sender, text, attrib, is_from_me in messages:
-
                     text = extract_text(text, attrib)
 
                     if not text or not re.search(r"\S", text):
@@ -127,8 +146,12 @@ def fetch_conversations():
                             continue
 
                     # Remove object replacement characters and other special chars
-                    text = text.replace('\ufffc', '').strip()
+                    text = text.replace("\ufffc", "").strip()
                     if not text or not re.search(r"\S", text):
+                        continue
+
+                    # Filter out messages with weird replacement characters (�)
+                    if "\ufffd" in text or "�" in text:
                         continue
 
                     role = ME_PATTERN if is_from_me else THEM_PATTERN
@@ -142,13 +165,34 @@ def fetch_conversations():
                 if ME_PATTERN not in roles:
                     continue
 
-                all_convos.append(filtered)
+                # Filter out conversations where all my messages are single words
+                my_messages = [text for role, text in filtered if role == ME_PATTERN]
+                if my_messages:
+                    # Check if ALL my messages are single words (excluding reaction tokens)
+                    all_single_words = all(
+                        len(text.split()) == 1
+                        for text in my_messages
+                        if not text.startswith("<|") or not text.endswith("|>")
+                    )
+                    if all_single_words:
+                        continue
+
+                # Add to conversations_by_contact, merging if contact already exists
+                if contact_id not in conversations_by_contact:
+                    conversations_by_contact[contact_id] = []
+                conversations_by_contact[contact_id].extend(filtered)
 
             conn.close()
 
         except Exception as e:
             print(f"Error reading database {db_path}: {e}")
             continue
+
+    # Convert dictionary to list of conversations
+    # Each conversation is all messages from a single contact across all databases
+    all_convos = list(conversations_by_contact.values())
+
+    print(f"   Merged into {len(all_convos)} unique contacts")
 
     return all_convos
 
@@ -157,13 +201,17 @@ def write_dataset(conversations):
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         convo_index = 0
         for convo in conversations:
-            cleaned = [(role, text) for role, text in convo if text and re.search(r"\S", text)]
+            cleaned = [
+                (role, text) for role, text in convo if text and re.search(r"\S", text)
+            ]
             if not cleaned:
                 continue
 
             convo_index += 1
             # Filter out whitespace-only messages before merging
-            non_whitespace = [(role, text) for role, text in cleaned if re.search(r"\S", text)]
+            non_whitespace = [
+                (role, text) for role, text in cleaned if re.search(r"\S", text)
+            ]
 
             # Concatenate successive "Them:" messages only
             merged = []
@@ -179,10 +227,16 @@ def write_dataset(conversations):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Extract conversations from one or more iMessage databases')
-    parser.add_argument('--db', action='append', dest='databases',
-                        help='Path to chat.db file (can be specified multiple times)',
-                        default=[])
+    parser = argparse.ArgumentParser(
+        description="Extract conversations from one or more iMessage databases"
+    )
+    parser.add_argument(
+        "--db",
+        action="append",
+        dest="databases",
+        help="Path to chat.db file (can be specified multiple times)",
+        default=[],
+    )
     args = parser.parse_args()
 
     # If no databases specified, use default

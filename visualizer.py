@@ -11,6 +11,9 @@ app = Flask(__name__)
 # Global variable to store database paths
 DB_PATHS = []
 
+# Self address to filter out conversations with yourself
+SELF_ADDRESS = "+17163594066"
+
 def get_conversation_data():
     """Fetch conversation metadata for visualization from all databases."""
     all_conversations = []
@@ -25,10 +28,40 @@ def get_conversation_data():
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
 
+            # Try to connect to Contacts database for names first
+            contact_names = {}
+            try:
+                import glob
+                contacts_dbs = glob.glob(os.path.expanduser("~/Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb"))
+                if contacts_dbs:
+                    contacts_conn = sqlite3.connect(contacts_dbs[0])
+                    contacts_cursor = contacts_conn.cursor()
+
+                    # Get contact names from the Contacts database
+                    contacts_cursor.execute("""
+                        SELECT ZABCDRECORD.ZUNIQUE_ID,
+                               ZABCDRECORD.ZFIRSTNAME,
+                               ZABCDRECORD.ZLASTNAME
+                        FROM ZABCDRECORD
+                        WHERE ZABCDRECORD.ZFIRSTNAME IS NOT NULL OR ZABCDRECORD.ZLASTNAME IS NOT NULL
+                    """)
+
+                    for unique_id, first_name, last_name in contacts_cursor.fetchall():
+                        full_name = " ".join(filter(None, [first_name, last_name]))
+                        if full_name:
+                            contact_names[unique_id] = full_name
+
+                    contacts_conn.close()
+                    print(f"   Loaded {len(contact_names)} contact names")
+            except Exception as e:
+                print(f"   Note: Could not load contact names: {e}")
+
             # Get all 1-on-1 conversations with message counts and time ranges
+            # Filter out conversations with yourself
             cursor.execute("""
                 SELECT
                     h.id as contact,
+                    h.person_centric_id,
                     COUNT(m.ROWID) as message_count,
                     MIN(datetime(m.date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch')) as first_message,
                     MAX(datetime(m.date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch')) as last_message,
@@ -46,22 +79,34 @@ def get_conversation_data():
                     GROUP BY chat.ROWID
                     HAVING COUNT(chj.handle_id) = 1
                 )
+                AND h.id != ?
                 GROUP BY h.id
-                HAVING message_count > 5
+                HAVING message_count > 5 AND sent_count > 0
                 ORDER BY message_count DESC
-            """)
+            """, (SELF_ADDRESS,))
 
             conversations = []
+            matched_count = 0
             for row in cursor.fetchall():
-                contact, msg_count, first_msg, last_msg, sent, received = row
+                contact, person_id, msg_count, first_msg, last_msg, sent, received = row
+
+                # Try to get the contact name
+                display_name = contact
+                if person_id and person_id in contact_names:
+                    display_name = f"{contact_names[person_id]} ({contact})"
+                    matched_count += 1
+
                 conversations.append({
-                    'contact': contact,
+                    'contact': display_name,
                     'messageCount': msg_count,
                     'firstMessage': first_msg,
                     'lastMessage': last_msg,
                     'sentCount': sent,
                     'receivedCount': received
                 })
+
+            if contact_names:
+                print(f"   Matched {matched_count}/{len(conversations)} contacts with names")
 
             # Also get all messages for timeline density
             cursor.execute("""
