@@ -222,12 +222,253 @@
         .contact-label.hidden {
             opacity: 0;
         }
+
+        /* Checkbox styling */
+        .conversation-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .contact-row {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .contact-row:hover .timeline-rect {
+            filter: brightness(1.2);
+        }
+
+        /* Detail view inline expansion */
+        .detail-view {
+            width: 100%;
+            margin: 1rem 0;
+            padding: 2rem;
+            background: #0a0a0a;
+            border-radius: 8px;
+            border: 1px solid #1a1a1a;
+            animation: slideDown 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        .detail-header h2 {
+            color: #e0e0e0;
+            font-size: 1.75rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin: 0;
+        }
+
+        .detail-hint {
+            color: #666;
+            font-size: 0.875rem;
+            margin-top: 0.75rem;
+            font-weight: 400;
+        }
+
+        .detail-hint .key {
+            display: inline-block;
+            background: #1a1a1a;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            color: #999;
+            font-size: 0.8125rem;
+            border: 1px solid #2a2a2a;
+        }
+
+        .close-btn {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            color: #888;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .close-btn:hover {
+            background: #222;
+            color: #e0e0e0;
+            border-color: #333;
+        }
+
+        .inclusion-toggle {
+            background: #1a1a1a;
+            border: 1.5px solid;
+            color: #fff;
+            font-size: 0.6875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 1rem;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .inclusion-toggle.included {
+            border-color: #10b981;
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .inclusion-toggle.excluded {
+            border-color: #ef4444;
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .inclusion-toggle:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .detail-header h2 {
+            display: inline-block;
+            margin: 0;
+            vertical-align: middle;
+            line-height: 1;
+        }
+
+        .message-line {
+            margin: 0.75rem 0;
+            padding: 1rem 1.25rem;
+            border-radius: 6px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            cursor: pointer;
+            transition: all 0.15s;
+            outline: none;
+            background: #0d0d0d;
+            border: 1px solid #1a1a1a;
+        }
+
+        .message-line:hover {
+            background: #111;
+            border-color: #2a2a2a;
+        }
+
+        .message-line:focus {
+            background: #141414;
+            border-color: #3a3a3a;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+        }
+
+        .message-line.me {
+            color: #c0c0c0;
+        }
+
+        .message-line.them {
+            color: #a0a0a0;
+        }
+
+        .special-token {
+            background: #1a1a1a;
+            color: #7c7c7c;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 0.8125rem;
+            border: 1px solid #2a2a2a;
+            margin-right: 0.5rem;
+        }
+
+        .conversation-start-marker {
+            background: #0f0f0f;
+            border-color: #2a2a2a;
+            border-left: 3px solid #667eea;
+        }
+
+        .conversation-start-marker .special-token {
+            color: #667eea;
+            background: #141414;
+            border-color: #667eea;
+        }
+
+        .scroll-indicator {
+            fill: rgba(128, 128, 128, 0.6);
+            stroke: #888;
+            stroke-width: 1;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .scroll-indicator.visible {
+            opacity: 1;
+        }
+
+        .timeline-rect {
+            cursor: pointer;
+        }
+
+        .conversation-marker-line {
+            stroke: #888;
+            stroke-width: 2;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        .generate-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #667eea;
+            color: #fff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .generate-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+        }
+
+        .generate-btn:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>iMessage Timeline</h1>
-        <div class="subtitle">Your conversations visualized over time</div>
+        <div class="subtitle">Your conversations visualized over time • Click a conversation to view details</div>
 
         <div id="loading">Loading your messages...</div>
 
@@ -255,12 +496,19 @@
         fetch('/api/data')
             .then(response => response.json())
             .then(data => {
+                // Store data globally for stats updates
+                allConversations = data.conversations;
+                allMessages = data.messages;
+
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('stats').style.display = 'grid';
                 document.getElementById('visualization').style.display = 'block';
 
                 createStats(data);
                 createVisualization(data);
+
+                // Draw any saved ConversationStart markers
+                drawAllSavedMarkers();
             })
             .catch(error => {
                 console.error('Error loading data:', error);
@@ -320,6 +568,9 @@
                 .append('g')
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
+            // Store SVG reference globally
+            svgElement = svg;
+
             // Parse dates
             const parseDate = d3.timeParse('%Y-%m-%d %H:%M:%S');
             conversations.forEach(c => {
@@ -339,6 +590,10 @@
                 .domain(conversations.map(c => c.contact))
                 .range([0, height])
                 .padding(0.2);
+
+            // Store scales globally
+            yScaleGlobal = yScale;
+            xScaleGlobal = xScale;
 
             // No color scale needed - all bars will be black
 
@@ -392,7 +647,33 @@
                 .data(conversations)
                 .enter()
                 .append('g')
-                .attr('class', 'contact-row');
+                .attr('class', 'contact-row')
+                .on('click', function(event, d) {
+                    // Don't open detail view if clicking checkbox
+                    if (event.target.tagName === 'INPUT') return;
+
+                    // If clicking on the timeline bar itself
+                    if (event.target.classList.contains('timeline-rect')) {
+                        // If detail is open for this contact, handle navigation
+                        if (currentDetailContact === d.contact) {
+                            handleTimelineClick(event, d.contact);
+                            return;
+                        }
+                        // Otherwise open the detail view
+                        openDetailView(d.contact);
+                        return;
+                    }
+
+                    // Clicking elsewhere on the row: toggle detail view
+                    if (currentDetailContact === d.contact) {
+                        closeDetailView();
+                    } else {
+                        openDetailView(d.contact);
+                    }
+                });
+
+            // Initialize selections
+            initializeSelections(conversations);
 
             // Contact name labels (hidden by default)
             contactRows.append('text')
@@ -421,33 +702,19 @@
             // Tooltip
             const tooltip = d3.select('.tooltip');
 
-            // Timeline bars - solid black with gray border
+            // Timeline bars - solid black with gray border, spanning full width
             contactRows.append('rect')
                 .attr('class', 'timeline-rect')
-                .attr('x', d => xScale(d.firstMessageDate))
+                .attr('x', 0)
                 .attr('y', d => yScale(d.contact))
-                .attr('width', d => Math.max(2, xScale(d.lastMessageDate) - xScale(d.firstMessageDate)))
+                .attr('width', width)
                 .attr('height', yScale.bandwidth())
                 .attr('rx', 4)
                 .attr('fill', '#000')
                 .attr('stroke', '#333')
                 .attr('stroke-width', 1)
                 .style('opacity', 1)
-                .on('mouseover', function(event, d) {
-                    tooltip.classed('show', true)
-                        .html(`
-                            <div class="tooltip-contact">${d.contact}</div>
-                            <div class="tooltip-stat">📊 ${d.messageCount.toLocaleString()} messages (${d.percentage.toFixed(2)}%)</div>
-                            <div class="tooltip-stat">📤 ${d.sentCount.toLocaleString()} sent</div>
-                            <div class="tooltip-stat">📥 ${d.receivedCount.toLocaleString()} received</div>
-                            <div class="tooltip-stat">📅 ${d3.timeFormat('%b %d, %Y')(d.firstMessageDate)} - ${d3.timeFormat('%b %d, %Y')(d.lastMessageDate)}</div>
-                        `)
-                        .style('left', (event.pageX + 15) + 'px')
-                        .style('top', (event.pageY - 15) + 'px');
-                })
-                .on('mouseout', function() {
-                    tooltip.classed('show', false);
-                });
+                .attr('data-contact', d => d.contact); // Store contact for click handling
 
             // Add message dots (optimized - sample more aggressively)
             conversations.forEach((conv, i) => {
@@ -470,6 +737,676 @@
                     .attr('r', 1.5)
                     .attr('fill', d => d.fromMe ? '#667eea' : '#f093fb');
             });
+        }
+    </script>
+
+    <!-- Generate Training Data Button -->
+    <button class="generate-btn" onclick="generateDataset()">Generate Training Data</button>
+
+    <script>
+        // Track selected conversations and custom tokens
+        let selectedContacts = new Set();
+        let conversationStarts = {}; // contact_id -> [message_indices]
+        let currentDetailContact = null;
+        let allConversations = []; // Store all conversations for stats
+        let allMessages = []; // Store all messages for stats
+        let svgElement = null; // Store SVG reference
+        let yScaleGlobal = null; // Store yScale reference
+        let xScaleGlobal = null; // Store xScale reference for timestamp positioning
+        let currentDetailRowData = null; // Track which row has detail open
+        let currentMessages = []; // Store current conversation messages
+        let scrollIndicator = null; // Track scroll indicator element
+        let currentConversationData = null; // Store current conversation metadata
+
+        // Load conversationStarts from localStorage
+        function loadConversationStarts() {
+            const saved = localStorage.getItem('conversationStarts');
+            if (saved) {
+                try {
+                    conversationStarts = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Error loading conversation starts:', e);
+                    conversationStarts = {};
+                }
+            }
+        }
+
+        // Save conversationStarts to localStorage
+        function saveConversationStarts() {
+            localStorage.setItem('conversationStarts', JSON.stringify(conversationStarts));
+        }
+
+        // Initialize on load
+        loadConversationStarts();
+
+        // Initialize all conversations as selected
+        function initializeSelections(conversations) {
+            conversations.forEach(conv => {
+                selectedContacts.add(conv.contact);
+            });
+        }
+
+        // Toggle conversation selection
+        function toggleConversation(contact) {
+            const isIncluded = selectedContacts.has(contact);
+
+            if (isIncluded) {
+                selectedContacts.delete(contact);
+            } else {
+                selectedContacts.add(contact);
+            }
+
+            // Update the bar colors
+            updateBarColors(contact, !isIncluded);
+
+            // Update stats
+            updateStats();
+
+            // Update toggle button if detail view is open
+            updateInclusionToggle(contact);
+
+            return !isIncluded; // Return new state
+        }
+
+        // Update bar colors based on inclusion state
+        function updateBarColors(contact, isIncluded) {
+            if (!svgElement) return;
+
+            svgElement.selectAll('.contact-row')
+                .filter(d => d.contact === contact)
+                .selectAll('.message-dot')
+                .transition()
+                .duration(200)
+                .attr('fill', d => {
+                    if (!isIncluded) return '#555'; // Grey when excluded
+                    return d.fromMe ? '#667eea' : '#f093fb'; // Normal colors
+                });
+        }
+
+        // Update inclusion toggle button
+        function updateInclusionToggle(contact) {
+            if (currentDetailContact !== contact) return;
+
+            const toggleBtn = document.getElementById('inclusion-toggle');
+            if (!toggleBtn) return;
+
+            const isIncluded = selectedContacts.has(contact);
+            toggleBtn.className = `inclusion-toggle ${isIncluded ? 'included' : 'excluded'}`;
+            toggleBtn.textContent = isIncluded ? 'Included' : 'Excluded';
+        }
+
+        // Update stats based on selected conversations
+        function updateStats() {
+            const selectedConvs = allConversations.filter(c => selectedContacts.has(c.contact));
+            const selectedMessages = allMessages.filter(m => selectedContacts.has(m.contact));
+
+            const totalContacts = selectedConvs.length;
+            const totalMessages = selectedMessages.length;
+            const sentMessages = selectedMessages.filter(m => m.fromMe).length;
+            const receivedMessages = totalMessages - sentMessages;
+
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalContacts.toLocaleString()}</div>
+                    <div class="stat-label">Conversations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${totalMessages.toLocaleString()}</div>
+                    <div class="stat-label">Total Messages</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${sentMessages.toLocaleString()}</div>
+                    <div class="stat-label">Sent</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${receivedMessages.toLocaleString()}</div>
+                    <div class="stat-label">Received</div>
+                </div>
+            `;
+        }
+
+        // Open detail view for a conversation
+        async function openDetailView(contactId) {
+            // Close any existing detail view first
+            closeDetailView();
+
+            currentDetailContact = contactId;
+            currentDetailRowData = contactId;
+
+            // Store conversation metadata
+            currentConversationData = allConversations.find(c => c.contact === contactId);
+
+            if (!svgElement || !yScaleGlobal) return;
+
+            // Calculate Y position (after the clicked row)
+            const rowY = yScaleGlobal(contactId);
+            const rowHeight = yScaleGlobal.bandwidth();
+            const detailY = rowY + rowHeight + 5; // 5px gap
+            const detailHeight = 400; // Fixed height for detail view
+
+            // Shift all rows below this one down
+            const domain = yScaleGlobal.domain();
+            const clickedIndex = domain.indexOf(contactId);
+
+            svgElement.selectAll('.contact-row')
+                .filter((d, i) => i > clickedIndex)
+                .transition()
+                .duration(300)
+                .attr('transform', d => `translate(0, ${detailHeight})`);
+
+            // Also shift marker lines for rows below
+            svgElement.selectAll('.conversation-marker-line')
+                .filter(function() {
+                    const markerContact = d3.select(this).attr('data-contact');
+                    const markerIndex = domain.indexOf(markerContact);
+                    return markerIndex > clickedIndex;
+                })
+                .transition()
+                .duration(300)
+                .attr('transform', `translate(0, ${detailHeight})`);
+
+            // Create foreignObject for detail view
+            const detailForeignObject = svgElement.append('foreignObject')
+                .attr('class', 'detail-foreign-object')
+                .attr('x', -220) // Align with left side
+                .attr('y', detailY)
+                .attr('width', 1600)
+                .attr('height', detailHeight);
+
+            // Create detail view HTML inside foreignObject
+            const detailDiv = detailForeignObject.append('xhtml:div')
+                .attr('class', 'detail-view')
+                .style('height', '100%')
+                .style('overflow-y', 'auto');
+
+            const isIncluded = selectedContacts.has(contactId);
+            const escapedContactId = contactId.replace(/'/g, "\\'");
+            detailDiv.html(`
+                <div class="detail-header">
+                    <div>
+                        <h2>${contactId}</h2>
+                        <button id="inclusion-toggle" class="inclusion-toggle ${isIncluded ? 'included' : 'excluded'}" onclick="toggleConversation('${escapedContactId}')">${isIncluded ? 'Included' : 'Excluded'}</button>
+                        <div class="detail-hint">Click a message, press <span class="key">c</span> to insert &lt;|ConversationStart|&gt; • Press <span class="key">Backspace</span> to remove • <span class="key">Shift+Backspace</span> to clear all • Press <span class="key">Esc</span> to close</div>
+                    </div>
+                    <div>
+                        <button class="close-btn" onclick="closeDetailView()">✕</button>
+                    </div>
+                </div>
+                <div id="detail-messages"><div style="text-align: center; padding: 2rem; color: #666;">Loading...</div></div>
+            `);
+
+            try {
+                const response = await fetch(`/api/conversation/${encodeURIComponent(contactId)}`);
+                const data = await response.json();
+
+                currentMessages = data.messages;
+                renderConversation(data.messages);
+
+                // Create scroll indicator on the bar
+                createScrollIndicator(contactId);
+
+                // Draw ConversationStart marker lines on the bar
+                drawConversationMarkerLines(contactId);
+
+                // Set up scroll listener
+                setupScrollListener();
+            } catch (error) {
+                document.getElementById('detail-messages').innerHTML = `<div style="color: #f44;">Error loading conversation: ${error.message}</div>`;
+            }
+        }
+
+        // Create scroll indicator on the timeline bar
+        function createScrollIndicator(contactId) {
+            if (!svgElement || !yScaleGlobal || !xScaleGlobal || !currentMessages.length) {
+                console.log('createScrollIndicator early return:', {
+                    svgElement: !!svgElement,
+                    yScaleGlobal: !!yScaleGlobal,
+                    xScaleGlobal: !!xScaleGlobal,
+                    messagesLength: currentMessages.length
+                });
+                return;
+            }
+
+            const rowY = yScaleGlobal(contactId);
+            const rowHeight = yScaleGlobal.bandwidth();
+
+            // Remove any existing scroll indicator
+            svgElement.selectAll('.scroll-indicator').remove();
+
+            // Create scroll indicator rectangle - 30px wide, slightly taller than bar
+            const indicatorHeight = rowHeight + 4; // A bit taller
+            const indicatorY = rowY - 2; // Offset to center it
+
+            // Get the first message timestamp to calculate initial X position
+            const parseDate = d3.timeParse('%Y-%m-%d %H:%M:%S');
+            const firstMsgDate = parseDate(currentMessages[0].date);
+            const initialX = xScaleGlobal(firstMsgDate);
+
+            console.log('Creating scroll indicator:', {
+                contactId,
+                rowY,
+                indicatorY,
+                initialX,
+                firstDate: currentMessages[0].date
+            });
+
+            scrollIndicator = svgElement.append('rect')
+                .attr('class', 'scroll-indicator visible')
+                .attr('x', initialX)
+                .attr('y', indicatorY)
+                .attr('width', 30) // Fixed 30px width
+                .attr('height', indicatorHeight)
+                .attr('rx', 3);
+        }
+
+        // Draw vertical lines for ConversationStart markers based on timestamps
+        function drawConversationMarkerLines(contactId) {
+            if (!svgElement || !yScaleGlobal || !xScaleGlobal || !currentMessages.length) return;
+
+            const rowY = yScaleGlobal(contactId);
+            const rowHeight = yScaleGlobal.bandwidth();
+
+            // Remove existing marker lines for THIS contact only
+            svgElement.selectAll(`.conversation-marker-line[data-contact="${contactId}"]`).remove();
+
+            const savedStarts = conversationStarts[contactId] || [];
+            if (savedStarts.length === 0) return;
+
+            // Parse date helper
+            const parseDate = d3.timeParse('%Y-%m-%d %H:%M:%S');
+
+            savedStarts.forEach(messageIndex => {
+                if (messageIndex >= currentMessages.length) return;
+
+                // Get the timestamp of the message at this index
+                const message = currentMessages[messageIndex];
+                const messageDate = parseDate(message.date);
+
+                if (!messageDate) return;
+
+                // Calculate X position based on timestamp
+                const xPos = xScaleGlobal(messageDate);
+
+                svgElement.append('line')
+                    .attr('class', 'conversation-marker-line')
+                    .attr('data-contact', contactId) // Track which contact this marker belongs to
+                    .attr('x1', xPos)
+                    .attr('x2', xPos)
+                    .attr('y1', rowY)
+                    .attr('y2', rowY + rowHeight);
+            });
+        }
+
+        // Draw markers for all conversations that have saved ConversationStarts
+        async function drawAllSavedMarkers() {
+            if (!svgElement || !yScaleGlobal || !xScaleGlobal) return;
+
+            for (const contactId in conversationStarts) {
+                if (conversationStarts[contactId].length === 0) continue;
+
+                // Fetch messages for this contact
+                try {
+                    const response = await fetch(`/api/conversation/${encodeURIComponent(contactId)}`);
+                    const data = await response.json();
+
+                    const messages = data.messages;
+                    if (!messages || messages.length === 0) continue;
+
+                    const rowY = yScaleGlobal(contactId);
+                    if (rowY === undefined) continue; // Contact not in current view
+
+                    const rowHeight = yScaleGlobal.bandwidth();
+                    const parseDate = d3.timeParse('%Y-%m-%d %H:%M:%S');
+
+                    conversationStarts[contactId].forEach(messageIndex => {
+                        if (messageIndex >= messages.length) return;
+
+                        const message = messages[messageIndex];
+                        const messageDate = parseDate(message.date);
+                        if (!messageDate) return;
+
+                        const xPos = xScaleGlobal(messageDate);
+
+                        svgElement.append('line')
+                            .attr('class', 'conversation-marker-line')
+                            .attr('data-contact', contactId)
+                            .attr('x1', xPos)
+                            .attr('x2', xPos)
+                            .attr('y1', rowY)
+                            .attr('y2', rowY + rowHeight);
+                    });
+                } catch (error) {
+                    console.error(`Error loading markers for ${contactId}:`, error);
+                }
+            }
+        }
+
+        // Set up scroll listener for detail messages
+        function setupScrollListener() {
+            const messagesDiv = document.getElementById('detail-messages');
+            if (!messagesDiv || !scrollIndicator) return;
+
+            messagesDiv.addEventListener('scroll', () => {
+                updateScrollIndicator(messagesDiv);
+            });
+
+            // Initial update
+            updateScrollIndicator(messagesDiv);
+        }
+
+        // Update scroll indicator position based on visible messages' timestamps
+        function updateScrollIndicator(messagesDiv) {
+            if (!scrollIndicator || !currentMessages.length || !xScaleGlobal) {
+                console.log('updateScrollIndicator early return:', {
+                    scrollIndicator: !!scrollIndicator,
+                    messagesLength: currentMessages.length,
+                    xScaleGlobal: !!xScaleGlobal
+                });
+                return;
+            }
+
+            const scrollTop = messagesDiv.scrollTop;
+            const scrollHeight = messagesDiv.scrollHeight;
+            const clientHeight = messagesDiv.clientHeight;
+
+            console.log('Scroll metrics:', { scrollTop, scrollHeight, clientHeight });
+
+            if (scrollHeight <= clientHeight) {
+                // No scrolling needed - but still show the indicator
+                console.log('No scrolling needed, keeping indicator visible');
+            }
+
+            // Always keep indicator visible when detail is open
+            scrollIndicator.classed('visible', true);
+
+            // Calculate which messages are currently visible
+            const scrollProportion = scrollTop / scrollHeight;
+            const visibleStartIndex = Math.floor(scrollProportion * currentMessages.length);
+            const visibleEndProportion = (scrollTop + clientHeight) / scrollHeight;
+            const visibleEndIndex = Math.min(
+                Math.ceil(visibleEndProportion * currentMessages.length),
+                currentMessages.length - 1
+            );
+
+            // Get timestamps of visible messages
+            const parseDate = d3.timeParse('%Y-%m-%d %H:%M:%S');
+            const startMsg = currentMessages[Math.max(0, visibleStartIndex)];
+            const endMsg = currentMessages[visibleEndIndex];
+
+            if (!startMsg || !endMsg) {
+                console.log('No start/end message found');
+                return;
+            }
+
+            const startDate = parseDate(startMsg.date);
+            const endDate = parseDate(endMsg.date);
+
+            if (!startDate || !endDate) {
+                console.log('Failed to parse dates');
+                return;
+            }
+
+            // Calculate X position based on timestamps
+            const startX = xScaleGlobal(startDate);
+            const endX = xScaleGlobal(endDate);
+
+            console.log('Updating indicator position:', { startX, endX, startDate, endDate });
+
+            // Position indicator at the start of visible range
+            scrollIndicator
+                .transition()
+                .duration(50)
+                .attr('x', startX);
+        }
+
+        // Handle clicking on timeline bar to jump to that timestamp position
+        function handleTimelineClick(event, contactId) {
+            if (currentDetailContact !== contactId || !xScaleGlobal || !currentMessages.length) return;
+
+            const messagesDiv = document.getElementById('detail-messages');
+            if (!messagesDiv) return;
+
+            // Get click position in SVG coordinates
+            const svgRect = event.target.ownerSVGElement.getBoundingClientRect();
+            const svgPoint = event.target.ownerSVGElement.createSVGPoint();
+            svgPoint.x = event.clientX;
+            svgPoint.y = event.clientY;
+            const ctm = event.target.getScreenCTM();
+            const transformedPoint = svgPoint.matrixTransform(ctm.inverse());
+
+            // Get the timestamp at this X position
+            const clickedDate = xScaleGlobal.invert(transformedPoint.x);
+
+            // Find the message index closest to this timestamp
+            const parseDate = d3.timeParse('%Y-%m-%d %H:%M:%S');
+            let closestIndex = 0;
+            let smallestDiff = Infinity;
+
+            currentMessages.forEach((msg, idx) => {
+                const msgDate = parseDate(msg.date);
+                if (!msgDate) return;
+
+                const diff = Math.abs(msgDate - clickedDate);
+                if (diff < smallestDiff) {
+                    smallestDiff = diff;
+                    closestIndex = idx;
+                }
+            });
+
+            // Calculate scroll position to show this message
+            const scrollHeight = messagesDiv.scrollHeight;
+            const targetScrollProportion = closestIndex / currentMessages.length;
+            const targetScroll = targetScrollProportion * scrollHeight;
+
+            // Smooth scroll to position
+            messagesDiv.scrollTo({
+                top: targetScroll,
+                behavior: 'smooth'
+            });
+        }
+
+        // Render conversation with special tokens highlighted
+        function renderConversation(messages) {
+            const messagesDiv = document.getElementById('detail-messages');
+            messagesDiv.innerHTML = '';
+
+            // Get saved ConversationStart indices for this contact
+            const savedStarts = conversationStarts[currentDetailContact] || [];
+
+            messages.forEach((msg, idx) => {
+                // Insert ConversationStart marker if this index is in savedStarts
+                if (savedStarts.includes(idx)) {
+                    const marker = document.createElement('div');
+                    marker.className = 'message-line conversation-start-marker';
+                    marker.innerHTML = '<span class="special-token">&lt;|ConversationStart|&gt;</span>';
+                    marker.tabIndex = 0;
+                    marker.addEventListener('click', () => marker.focus());
+                    messagesDiv.appendChild(marker);
+                }
+
+                const div = document.createElement('div');
+                div.className = 'message-line';
+                div.dataset.messageIndex = idx;
+                div.tabIndex = 0; // Make focusable
+
+                if (msg.role === '<|Me|>') {
+                    div.classList.add('me');
+                    div.innerHTML = `<span class="special-token">&lt;|Me|&gt;</span>${escapeHtml(msg.text)}`;
+                } else if (msg.role === '<|Them|>') {
+                    div.classList.add('them');
+                    div.innerHTML = `<span class="special-token">&lt;|Them|&gt;</span>${escapeHtml(msg.text)}`;
+                } else {
+                    // Reaction or other special token
+                    div.innerHTML = `<span class="special-token">${escapeHtml(msg.text)}</span>`;
+                }
+
+                // Click to focus
+                div.addEventListener('click', () => div.focus());
+
+                messagesDiv.appendChild(div);
+            });
+        }
+
+        // Close detail view
+        function closeDetailView() {
+            if (!svgElement) return;
+
+            // Remove the foreignObject containing the detail view
+            svgElement.selectAll('.detail-foreign-object').remove();
+
+            // Remove scroll indicator only (keep marker lines visible)
+            svgElement.selectAll('.scroll-indicator').remove();
+
+            // Reset all row transforms
+            svgElement.selectAll('.contact-row')
+                .transition()
+                .duration(300)
+                .attr('transform', 'translate(0, 0)');
+
+            // Reset all marker line transforms
+            svgElement.selectAll('.conversation-marker-line')
+                .transition()
+                .duration(300)
+                .attr('transform', 'translate(0, 0)');
+
+            currentDetailContact = null;
+            currentDetailRowData = null;
+            currentMessages = [];
+            scrollIndicator = null;
+        }
+
+        // Handle 'c' key to insert <|ConversationStart|>, backspace to remove
+        document.addEventListener('keydown', (e) => {
+            if (!currentDetailContact) {
+                if (e.key === 'Escape') closeDetailView();
+                return;
+            }
+
+            const messagesDiv = document.getElementById('detail-messages');
+            const activeElement = document.activeElement;
+
+            if (!messagesDiv.contains(activeElement) || !activeElement.classList.contains('message-line')) {
+                if (e.key === 'Escape') closeDetailView();
+                return;
+            }
+
+            if (e.key === 'c') {
+                e.preventDefault();
+                const messageIndex = parseInt(activeElement.dataset.messageIndex);
+
+                // Add to conversation starts
+                if (!conversationStarts[currentDetailContact]) {
+                    conversationStarts[currentDetailContact] = [];
+                }
+                conversationStarts[currentDetailContact].push(messageIndex);
+                saveConversationStarts(); // Persist to localStorage
+
+                // Insert visual indicator
+                const indicator = document.createElement('div');
+                indicator.className = 'message-line conversation-start-marker';
+                indicator.innerHTML = '<span class="special-token">&lt;|ConversationStart|&gt;</span>';
+                indicator.tabIndex = 0;
+                indicator.addEventListener('click', () => indicator.focus());
+                activeElement.parentNode.insertBefore(indicator, activeElement);
+
+                // Redraw marker lines on the bar
+                drawConversationMarkerLines(currentDetailContact);
+            } else if (e.key === 'Backspace') {
+                // Shift+Backspace: Clear all ConversationStart markers for this conversation
+                if (e.shiftKey) {
+                    e.preventDefault();
+
+                    // Clear all markers for this conversation
+                    if (conversationStarts[currentDetailContact]) {
+                        conversationStarts[currentDetailContact] = [];
+                        saveConversationStarts(); // Persist to localStorage
+
+                        // Remove all visual markers
+                        const messagesDiv = document.getElementById('detail-messages');
+                        if (messagesDiv) {
+                            const markers = messagesDiv.querySelectorAll('.conversation-start-marker');
+                            markers.forEach(marker => marker.remove());
+                        }
+
+                        // Redraw marker lines (removes them since array is empty)
+                        drawConversationMarkerLines(currentDetailContact);
+                    }
+                } else if (activeElement.classList.contains('conversation-start-marker')) {
+                    // Regular Backspace: Remove single marker
+                    e.preventDefault();
+
+                    // Find which message index this was before
+                    let messageIndex = null;
+                    let nextSibling = activeElement.nextElementSibling;
+                    if (nextSibling && nextSibling.dataset.messageIndex) {
+                        messageIndex = parseInt(nextSibling.dataset.messageIndex);
+                    }
+
+                    // Remove from conversationStarts array
+                    if (messageIndex !== null && conversationStarts[currentDetailContact]) {
+                        const index = conversationStarts[currentDetailContact].indexOf(messageIndex);
+                        if (index > -1) {
+                            conversationStarts[currentDetailContact].splice(index, 1);
+                            saveConversationStarts(); // Persist to localStorage
+                        }
+                    }
+
+                    // Remove the visual element
+                    activeElement.remove();
+
+                    // Redraw marker lines on the bar
+                    drawConversationMarkerLines(currentDetailContact);
+                }
+            } else if (e.key === 'Escape') {
+                closeDetailView();
+            }
+        });
+
+        // Generate dataset
+        async function generateDataset() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+
+            try {
+                const response = await fetch('/api/generate-dataset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        selected_contacts: Array.from(selectedContacts),
+                        conversation_starts: conversationStarts
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to generate dataset');
+
+                // Download the file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'imessages_dataset.txt';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+                btn.textContent = 'Generate Training Data';
+                btn.disabled = false;
+            } catch (error) {
+                alert('Error generating dataset: ' + error.message);
+                btn.textContent = 'Generate Training Data';
+                btn.disabled = false;
+            }
+        }
+
+        // Helper function
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
     </script>
 </body>

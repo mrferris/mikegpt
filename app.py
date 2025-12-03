@@ -48,7 +48,7 @@ def generate():
                 history = conversations[session_id]
 
             # Start building new history
-            new_history = history + f"<|Them|>{user_message}"
+            new_history = history + f"<|ConversationStart|><|Them|>{user_message}"
 
             # Stream each response as it's generated
             for response in model.generate_response_stream(history, user_message):

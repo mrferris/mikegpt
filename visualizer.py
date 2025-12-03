@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import sqlite3
 import os
+import re
+import string
 import argparse
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request, send_file
 from datetime import datetime
 import json
 
@@ -13,6 +15,185 @@ DB_PATHS = []
 
 # Self address to filter out conversations with yourself
 SELF_ADDRESS = "+17163594066"
+
+# Patterns from get_convos.py
+REACTION_PATTERNS = re.compile(
+    r"^(Loved|Liked|Laughed at|Disliked|Emphasized) ", re.DOTALL
+)
+URL_PATTERN = re.compile(r"https?://\S+")
+
+ME_PATTERN = "<|Me|>"
+THEM_PATTERN = "<|Them|>"
+
+PRINTABLE = set(string.printable)
+
+def extract_text(row_text, row_attributed):
+    """Get clean message text from iMessage DB row."""
+    # First try the plain text field
+    if row_text and row_text.strip():
+        return row_text.strip()
+
+    if not row_attributed:
+        return None
+
+    try:
+        # Use PyObjC to properly deserialize the NSAttributedString
+        from Foundation import NSData, NSKeyedUnarchiver
+
+        # Convert bytes to NSData
+        ns_data = NSData.dataWithBytes_length_(row_attributed, len(row_attributed))
+
+        # Unarchive the attributed string
+        unarchiver = NSKeyedUnarchiver.alloc().initForReadingWithData_(ns_data)
+        unarchiver.setRequiresSecureCoding_(False)
+        attributed_string = unarchiver.decodeObjectForKey_("root")
+        unarchiver.finishDecoding()
+
+        if attributed_string is None:
+            return None
+
+        # Get the plain string from the attributed string
+        text = attributed_string.string()
+
+        if text:
+            return text.strip()
+
+        return None
+
+    except Exception as e:
+        # If PyObjC fails, return None
+        return None
+
+def get_formatted_conversation(contact_id):
+    """
+    Fetch a single conversation with full message details and formatting.
+    Returns the conversation exactly as it would appear in training data.
+    """
+    conversation_messages = []
+
+    for db_path in DB_PATHS:
+        if not os.path.exists(db_path):
+            continue
+
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            # Get all 1-on-1 chat IDs
+            cursor.execute("""
+                SELECT chat.ROWID
+                FROM chat
+                JOIN chat_handle_join chj ON chat.ROWID = chj.chat_id
+                GROUP BY chat.ROWID
+                HAVING COUNT(chj.handle_id) = 1
+            """)
+            chat_ids = [row[0] for row in cursor.fetchall()]
+
+            for chat_id in chat_ids:
+                cursor.execute(
+                    """
+                    SELECT
+                        message.ROWID,
+                        datetime(message.date/1000000000 + strftime('%s','2001-01-01'), 'unixepoch') as message_date,
+                        handle.id as sender,
+                        message.text,
+                        message.attributedBody,
+                        message.is_from_me
+                    FROM chat_message_join cmj
+                    JOIN message ON cmj.message_id = message.ROWID
+                    LEFT JOIN handle ON message.handle_id = handle.ROWID
+                    WHERE cmj.chat_id = ?
+                    ORDER BY message_date ASC
+                """,
+                    (chat_id,),
+                )
+                messages = cursor.fetchall()
+
+                # Check if this conversation is for the requested contact
+                contact_match = None
+                for _, _, sender, _, _, _ in messages:
+                    if sender and sender != SELF_ADDRESS:
+                        contact_match = sender
+                        break
+
+                if contact_match != contact_id:
+                    continue
+
+                # Skip convos with yourself
+                if any(m[2] == SELF_ADDRESS for m in messages if m[2]):
+                    continue
+
+                # Apply filters and format messages
+                for rowid, date, sender, text, attrib, is_from_me in messages:
+                    text = extract_text(text, attrib)
+
+                    if not text or not re.search(r"\S", text):
+                        continue
+                    if URL_PATTERN.search(text):
+                        continue
+
+                    # Handle reaction messages
+                    reaction_match = REACTION_PATTERNS.match(text.strip())
+                    if reaction_match:
+                        if is_from_me:
+                            # Convert my reactions to tokens
+                            reaction_type = reaction_match.group(1)
+                            text = f"<|{reaction_type}|>"
+                        else:
+                            # Skip their reactions
+                            continue
+
+                    # Remove object replacement characters and other special chars
+                    text = text.replace("\ufffc", "").strip()
+                    if not text or not re.search(r"\S", text):
+                        continue
+
+                    # Filter out messages with weird replacement characters (�)
+                    if "\ufffd" in text or "�" in text:
+                        continue
+
+                    role = ME_PATTERN if is_from_me else THEM_PATTERN
+                    conversation_messages.append({
+                        'role': role,
+                        'text': text,
+                        'date': date
+                    })
+
+            conn.close()
+
+        except Exception as e:
+            print(f"Error reading database {db_path}: {e}")
+            continue
+
+    # Merge successive "Them:" messages only if within 1 hour
+    from datetime import datetime, timedelta
+
+    merged = []
+    for msg in conversation_messages:
+        should_merge = False
+
+        if merged and merged[-1]['role'] == msg['role'] and msg['role'] == THEM_PATTERN:
+            # Check if messages are within 1 hour of each other
+            try:
+                prev_time = datetime.fromisoformat(merged[-1]['date'].replace(' ', 'T'))
+                curr_time = datetime.fromisoformat(msg['date'].replace(' ', 'T'))
+                time_diff = (curr_time - prev_time).total_seconds()
+
+                # Merge if within 1 hour (3600 seconds)
+                if time_diff <= 3600:
+                    should_merge = True
+            except:
+                # If date parsing fails, don't merge
+                pass
+
+        if should_merge:
+            merged[-1]['text'] += " " + msg['text']
+            # Update date to the later message
+            merged[-1]['date'] = msg['date']
+        else:
+            merged.append(msg)
+
+    return merged
 
 def get_conversation_data():
     """Fetch conversation metadata for visualization from all databases."""
@@ -197,6 +378,55 @@ def index():
 @app.route('/api/data')
 def data():
     return jsonify(get_conversation_data())
+
+@app.route('/api/conversation/<path:contact_id>')
+def conversation_detail(contact_id):
+    """Get detailed formatted conversation for a specific contact."""
+    messages = get_formatted_conversation(contact_id)
+    return jsonify({'messages': messages})
+
+@app.route('/api/generate-dataset', methods=['POST'])
+def generate_dataset():
+    """
+    Generate training data file based on selected conversations and custom tokens.
+    Request body should contain:
+    - selected_contacts: list of contact IDs to include
+    - conversation_starts: dict mapping contact_id -> list of message indices where to insert <|ConversationStart|>
+    """
+    data = request.json
+    selected_contacts = data.get('selected_contacts', [])
+    conversation_starts = data.get('conversation_starts', {})
+
+    output_file = "imessages_dataset.txt"
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        for contact_id in selected_contacts:
+            messages = get_formatted_conversation(contact_id)
+
+            if not messages:
+                continue
+
+            # Get indices where we should insert <|ConversationStart|>
+            start_indices = set(conversation_starts.get(contact_id, []))
+
+            # Insert conversation start tokens (messages are already merged by get_formatted_conversation)
+            final_messages = []
+            for idx, msg in enumerate(messages):
+                # Insert conversation start token if needed
+                if idx in start_indices:
+                    final_messages.append({'role': '', 'text': '<|ConversationStart|>'})
+                final_messages.append(msg)
+
+            # Write to file
+            for msg in final_messages:
+                if msg['role']:  # Normal message
+                    f.write(f"{msg['role']}{msg['text']}")
+                else:  # Special token
+                    f.write(msg['text'])
+
+            f.write("<|endoftext|>")  # End of conversation marker
+
+    return send_file(output_file, as_attachment=True, download_name=output_file)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Visualize iMessage conversations from one or more databases')

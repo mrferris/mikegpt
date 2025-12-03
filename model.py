@@ -164,10 +164,7 @@ class Model:
             Tree structure with nodes containing token info and children
         """
         # Tokenize the initial prompt
-        print(prompt)
-
         prompt = "<|Them|>" + prompt + "<|Me|>"
-        print(prompt)
         tokens = self.tokenizer.encode(prompt)
         if len(tokens) > self.context_length:
             tokens = tokens[-self.context_length :]
