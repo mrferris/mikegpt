@@ -218,3 +218,188 @@ document.getElementById('message-input').addEventListener('keypress', (e) => {
 
 // Focus input on load
 document.getElementById('message-input').focus();
+
+// Get first user message from conversation
+function getFirstUserMessage() {
+    const messages = document.getElementById('messages');
+    const userMessage = messages.querySelector('.message.user .message-bubble');
+    return userMessage ? userMessage.textContent : '';
+}
+
+// Store original content for reversing animation
+let originalPhoneContent = null;
+let isLightMode = false;
+
+// Animate to MikeRL iPad mode (light mode)
+async function animateToMikeRL() {
+    if (isLightMode) return; // Already in light mode
+
+    isLightMode = true;
+    const phoneContainer = document.querySelector('.phone-container');
+    const messagesContainer = document.getElementById('messages');
+    const inputContainer = document.querySelector('.input-container');
+    const chatHeader = document.querySelector('.chat-header');
+    const statusBar = document.querySelector('.status-bar');
+
+    // Store original content for later restoration
+    originalPhoneContent = {
+        html: phoneContainer.innerHTML,
+        width: phoneContainer.style.width,
+        maxWidth: phoneContainer.style.maxWidth,
+        height: phoneContainer.style.height,
+        maxHeight: phoneContainer.style.maxHeight
+    };
+
+    // Get the first user message to use as prompt
+    const firstMessage = getFirstUserMessage();
+
+    // Fade out content
+    messagesContainer.style.transition = 'opacity 0.3s ease';
+    inputContainer.style.transition = 'opacity 0.3s ease';
+    chatHeader.style.transition = 'opacity 0.3s ease';
+    statusBar.style.transition = 'opacity 0.3s ease';
+
+    messagesContainer.style.opacity = '0';
+    inputContainer.style.opacity = '0';
+    chatHeader.style.opacity = '0';
+    statusBar.style.opacity = '0';
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Animate phone to iPad size
+    phoneContainer.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+    phoneContainer.style.width = '98vw';
+    phoneContainer.style.maxWidth = '1800px';
+    phoneContainer.style.height = '96vh';
+    phoneContainer.style.maxHeight = '1200px';
+
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    // Hide original content
+    messagesContainer.style.display = 'none';
+    inputContainer.style.display = 'none';
+    chatHeader.style.display = 'none';
+    statusBar.style.display = 'none';
+
+    // Load MikeRL interface
+    const response = await fetch('/drive?mode=imessage');
+    const html = await response.text();
+
+    // Extract content from the loaded page
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Extract and inject styles
+    const styles = doc.querySelectorAll('style');
+    styles.forEach(style => {
+        const newStyle = document.createElement('style');
+        newStyle.textContent = style.textContent;
+        document.head.appendChild(newStyle);
+    });
+
+    // Inject body content
+    const driveContent = doc.body.innerHTML;
+    phoneContainer.innerHTML = driveContent;
+    phoneContainer.classList.add('ipad-mode');
+
+    // Add light-mode class to body
+    document.body.classList.add('light-mode');
+
+    // Execute scripts from the loaded content
+    const scripts = phoneContainer.querySelectorAll('script');
+    scripts.forEach(script => {
+        const newScript = document.createElement('script');
+        newScript.textContent = script.textContent;
+        script.parentNode.replaceChild(newScript, script);
+    });
+
+    // Pre-fill the prompt if we have a first message
+    setTimeout(() => {
+        const promptInput = document.getElementById('prompt-imessage');
+        if (promptInput && firstMessage) {
+            promptInput.value = firstMessage;
+        }
+
+        // Initialize Training History dropdown
+        const historyHeader = document.getElementById('history-header');
+        const historyList = document.getElementById('history-list');
+        const dropdownArrow = document.getElementById('dropdown-arrow');
+
+        if (historyHeader && historyList && dropdownArrow) {
+            historyHeader.addEventListener('click', () => {
+                historyList.classList.toggle('open');
+                dropdownArrow.classList.toggle('open');
+            });
+        }
+
+        // In iMessage mode, show game container but keep loading screen visible as input bar
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer) {
+            gameContainer.classList.add('active');
+        }
+    }, 100);
+}
+
+// Reverse animation back to MikeGPT
+async function animateBackToMikeGPT() {
+    if (!isLightMode) return; // Not in light mode
+
+    const phoneContainer = document.querySelector('.phone-container');
+
+    // Remove light-mode class from body
+    document.body.classList.remove('light-mode');
+
+    // Fade out the MikeRL content
+    phoneContainer.style.transition = 'opacity 0.3s ease';
+    phoneContainer.style.opacity = '0';
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Animate back to phone size
+    phoneContainer.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+    phoneContainer.style.width = originalPhoneContent.width || '100%';
+    phoneContainer.style.maxWidth = originalPhoneContent.maxWidth || '400px';
+    phoneContainer.style.height = originalPhoneContent.height || '90vh';
+    phoneContainer.style.maxHeight = originalPhoneContent.maxHeight || '800px';
+    phoneContainer.classList.remove('ipad-mode');
+
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    // Restore original content
+    phoneContainer.innerHTML = originalPhoneContent.html;
+
+    // Fade back in
+    phoneContainer.style.opacity = '1';
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Re-attach event listeners
+    document.getElementById('send-button').addEventListener('click', sendMessage);
+    document.getElementById('message-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    // Focus the input
+    document.getElementById('message-input').focus();
+
+    isLightMode = false;
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Press 'r' to enter light mode (MikeRL)
+    if (e.key === 'r' || e.key === 'R') {
+        // Don't trigger if typing in input
+        if (document.activeElement === document.getElementById('message-input')) {
+            return;
+        }
+        animateToMikeRL();
+    }
+
+    // Press 'Escape' to exit light mode and return to MikeGPT
+    if (e.key === 'Escape') {
+        animateBackToMikeGPT();
+    }
+});

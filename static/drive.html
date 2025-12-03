@@ -19,6 +19,319 @@
             height: 100vh;
         }
 
+        /* Light mode theme */
+        body.light-mode {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        body.light-mode #game-container {
+            width: 100%;
+            height: 100%;
+            background: white;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body.light-mode #loading-screen {
+            background: rgba(255, 255, 255, 0.98);
+            color: #000;
+            backdrop-filter: blur(20px);
+        }
+
+        body.light-mode .prompt-input {
+            background: #F0F0F0;
+            border: 2px solid #d1d1d1;
+            color: #000;
+        }
+
+        body.light-mode .prompt-input:focus {
+            border-color: #007AFF;
+        }
+
+        body.light-mode .control-input {
+            background: #F0F0F0;
+            border: 2px solid #d1d1d1;
+            color: #000;
+        }
+
+        body.light-mode .control-label {
+            color: #888;
+        }
+
+        body.light-mode .start-btn {
+            background: #007AFF;
+            color: #fff;
+        }
+
+        body.light-mode .start-btn:hover {
+            background: #0051D5;
+        }
+
+        body.light-mode .loading-text {
+            color: #888;
+        }
+
+        body.light-mode .title {
+            color: #000;
+            font-weight: 600;
+        }
+
+        body.light-mode .token-card {
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #007AFF;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        body.light-mode .token-card:hover {
+            border-color: #0051D5;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 6px 16px rgba(0, 122, 255, 0.2);
+        }
+
+        body.light-mode .token-card.active {
+            border-color: #007AFF;
+            background: rgba(240, 248, 255, 1);
+            box-shadow: 0 0 30px rgba(0, 122, 255, 0.3), 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        body.light-mode .token-text {
+            color: #000;
+        }
+
+        body.light-mode .token-prob {
+            color: #666;
+        }
+
+        body.light-mode .cumulative-prob {
+            color: #888;
+        }
+
+        body.light-mode .controls-overlay {
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid #d1d1d1;
+            backdrop-filter: blur(20px);
+            bottom: 80px;
+            width: 90%;
+            max-width: 1400px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            gap: 10px;
+        }
+
+        body.light-mode .control-hint {
+            color: #666;
+            flex: 0 1 auto;
+        }
+
+        body.light-mode .key {
+            background: #F0F0F0;
+            border: 1px solid #d1d1d1;
+            color: #000;
+        }
+
+        body.light-mode .path-display {
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid #d1d1d1;
+            backdrop-filter: blur(20px);
+        }
+
+        body.light-mode .path-title,
+        body.light-mode .depth-label {
+            color: #888;
+        }
+
+        body.light-mode .path-text,
+        body.light-mode .depth-value {
+            color: #000;
+        }
+
+        body.light-mode .selections-panel {
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid #d1d1d1;
+            backdrop-filter: blur(20px);
+        }
+
+        body.light-mode .panel-title,
+        body.light-mode .history-title {
+            color: #888;
+        }
+
+        body.light-mode .selection-item {
+            background: rgba(52, 199, 89, 0.1);
+            border-left-color: #34C759;
+            color: #000;
+        }
+
+        body.light-mode .selection-item.negative {
+            background: rgba(255, 59, 48, 0.1);
+            border-left-color: #FF3B30;
+        }
+
+        body.light-mode .selection-placeholder {
+            background: rgba(0, 0, 0, 0.03);
+            border-left-color: #d1d1d1;
+            color: #999;
+        }
+
+        body.light-mode .action-btn {
+            background: rgba(0, 122, 255, 0.1);
+            border-color: #007AFF;
+            color: #007AFF;
+        }
+
+        body.light-mode .action-btn:hover {
+            background: rgba(0, 122, 255, 0.2);
+        }
+
+        body.light-mode .action-btn.positive {
+            border-color: #34C759;
+            color: #34C759;
+        }
+
+        body.light-mode .action-btn.positive:hover {
+            background: rgba(52, 199, 89, 0.2);
+        }
+
+        body.light-mode .action-btn.negative {
+            border-color: #FF3B30;
+            color: #FF3B30;
+        }
+
+        body.light-mode .action-btn.negative:hover {
+            background: rgba(255, 59, 48, 0.2);
+        }
+
+        /* Position loading screen as input bar in light mode */
+        body.light-mode #loading-screen {
+            position: absolute;
+            bottom: 8px;
+            left: 12px;
+            right: 12px;
+            top: auto;
+            height: auto;
+            background: transparent;
+            border: none;
+            padding: 8px 0;
+            z-index: 300;
+            justify-content: flex-start;
+        }
+
+        body.light-mode #loading-screen.hidden {
+            display: flex;
+        }
+
+        body.light-mode .input-wrapper-drive {
+            display: flex;
+            align-items: center;
+            background: #F0F0F0;
+            border-radius: 20px;
+            padding: 6px 6px 6px 12px;
+            gap: 8px;
+            width: 100%;
+        }
+
+        body.light-mode .input-icon {
+            background: none;
+            border: none;
+            color: #007AFF;
+            font-size: 22px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.light-mode .prompt-input-imessage {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #000;
+            padding: 4px 0;
+            font-size: 16px;
+            outline: none;
+            margin: 0;
+        }
+
+        body.light-mode .send-button-drive {
+            background: #007AFF;
+            border: none;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            flex-shrink: 0;
+            padding: 0;
+        }
+
+        body.light-mode .send-button-drive:hover {
+            background: #0051D5;
+        }
+
+        body.light-mode .send-button-drive svg {
+            width: 18px;
+            height: 18px;
+            margin-left: 2px;
+        }
+
+        body.light-mode .controls {
+            display: none;
+        }
+
+        body.light-mode .start-btn {
+            display: none;
+        }
+
+        body.light-mode #error-container {
+            display: none;
+        }
+
+        /* Normal mode (dark mode): show plain input, hide wrapper */
+        .prompt-input {
+            background: #111;
+            border: 2px solid #333;
+            color: #fff;
+            padding: 15px 20px;
+            font-size: 18px;
+            width: 500px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .prompt-input:focus {
+            border-color: #fff;
+        }
+
+        .input-wrapper-drive {
+            display: none;
+        }
+
+        /* Light mode: hide plain input, show wrapper */
+        body.light-mode .prompt-input {
+            display: none !important;
+        }
+
+        body.light-mode .input-wrapper-drive {
+            display: flex !important;
+        }
+
         #loading-screen {
             position: fixed;
             top: 0;
@@ -35,23 +348,6 @@
 
         #loading-screen.hidden {
             display: none;
-        }
-
-        .prompt-input {
-            background: #111;
-            border: 2px solid #333;
-            color: #fff;
-            padding: 15px 20px;
-            font-size: 18px;
-            width: 500px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .prompt-input:focus {
-            border-color: #fff;
         }
 
         .controls {
@@ -533,6 +829,17 @@
     <div id="loading-screen">
         <input type="text" class="prompt-input" id="prompt" placeholder="Enter your prompt..." value="Hello">
 
+        <div class="input-wrapper-drive">
+            <button class="input-icon">+</button>
+            <input type="text" class="prompt-input-imessage" id="prompt-imessage" placeholder="Enter your prompt..." value="Hello">
+            <button class="send-button-drive" id="send-button-drive">
+                <svg width="22" height="22" viewBox="0 0 22 22">
+                    <path d="M2 10.5 L20 10.5 M20 10.5 L13 3.5 M20 10.5 L13 17.5"
+                          fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+
         <div class="controls">
             <div>
                 <div class="control-label">K (branches)</div>
@@ -611,6 +918,14 @@
     </div>
 
     <script>
+        // Check for light mode
+        const urlParams = new URLSearchParams(window.location.search);
+        const isLightMode = urlParams.get('mode') === 'imessage';
+
+        if (isLightMode) {
+            document.body.classList.add('light-mode');
+        }
+
         let treeData = null;
         let currentPath = [];
         let currentIndex = 0;
@@ -621,7 +936,12 @@
         let loadedDepths = new Set(); // Track which depth layers we've already loaded
 
         async function startDrive() {
-            const prompt = document.getElementById('prompt').value;
+            // Check if we're in light mode and use the appropriate input
+            const isLightMode = document.body.classList.contains('light-mode');
+            const promptInput = isLightMode ?
+                document.getElementById('prompt-imessage') :
+                document.getElementById('prompt');
+            const prompt = promptInput.value;
             const k = parseInt(document.getElementById('k-value').value);
             const n = parseInt(document.getElementById('n-value').value);
 
@@ -1105,8 +1425,38 @@
             }
         }
 
+        // Enter key handler for prompt inputs
+        document.getElementById('prompt').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                startDrive();
+            }
+        });
+
+        document.getElementById('prompt-imessage').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                startDrive();
+            }
+        });
+
+        // Send button handler
+        const sendBtn = document.getElementById('send-button-drive');
+        if (sendBtn) {
+            sendBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                startDrive();
+            });
+        }
+
         // Keyboard controls
         document.addEventListener('keydown', (e) => {
+            // Don't interfere with typing in the prompt inputs
+            if (document.activeElement === document.getElementById('prompt') ||
+                document.activeElement === document.getElementById('prompt-imessage')) {
+                return;
+            }
+
             if (document.getElementById('loading-screen').classList.contains('hidden')) {
                 switch(e.key) {
                     case 'ArrowLeft':
