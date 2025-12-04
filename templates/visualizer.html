@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iMessage Timeline Visualizer</title>
+    <title>MikeGPT Pre-Training Data Dashboard</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         * {
@@ -467,10 +467,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>iMessage Timeline</h1>
-        <div class="subtitle">Your conversations visualized over time • Click a conversation to view details</div>
+        <h1>MikeGPT Pre-Training Data Dashboard</h1>
+        <div class="subtitle">Click a conversation to view/edit details</div>
 
-        <div id="loading">Loading your messages...</div>
+        <div id="loading">Loading messages...</div>
 
         <div id="stats" class="stats" style="display: none;"></div>
 
@@ -727,6 +727,9 @@
                 // Append dots to the contact row group
                 const rowGroup = d3.selectAll('.contact-row').filter((d, idx) => idx === i);
 
+                // Check if this conversation is excluded
+                const isIncluded = selectedContacts.has(conv.contact);
+
                 rowGroup.selectAll('circle')
                     .data(sampledMessages)
                     .enter()
@@ -735,7 +738,10 @@
                     .attr('cx', d => xScale(parseDate(d.date)))
                     .attr('cy', yScale(conv.contact) + yScale.bandwidth() / 2)
                     .attr('r', 1.5)
-                    .attr('fill', d => d.fromMe ? '#667eea' : '#f093fb');
+                    .attr('fill', d => {
+                        if (!isIncluded) return '#555'; // Grey when excluded
+                        return d.fromMe ? '#667eea' : '#f093fb'; // Normal colors
+                    });
             });
         }
     </script>
@@ -757,6 +763,7 @@
         let currentMessages = []; // Store current conversation messages
         let scrollIndicator = null; // Track scroll indicator element
         let currentConversationData = null; // Store current conversation metadata
+        let messageCache = {}; // Cache conversation messages to avoid refetching
 
         // Load conversationStarts from localStorage
         function loadConversationStarts() {
@@ -776,14 +783,37 @@
             localStorage.setItem('conversationStarts', JSON.stringify(conversationStarts));
         }
 
+        // Load selectedContacts from localStorage
+        function loadSelectedContacts() {
+            const saved = localStorage.getItem('selectedContacts');
+            if (saved) {
+                try {
+                    const savedArray = JSON.parse(saved);
+                    selectedContacts = new Set(savedArray);
+                } catch (e) {
+                    console.error('Error loading selected contacts:', e);
+                    selectedContacts = new Set();
+                }
+            }
+        }
+
+        // Save selectedContacts to localStorage
+        function saveSelectedContacts() {
+            localStorage.setItem('selectedContacts', JSON.stringify(Array.from(selectedContacts)));
+        }
+
         // Initialize on load
         loadConversationStarts();
+        loadSelectedContacts();
 
-        // Initialize all conversations as selected
+        // Initialize all conversations as excluded (only if no saved state exists)
         function initializeSelections(conversations) {
-            conversations.forEach(conv => {
-                selectedContacts.add(conv.contact);
-            });
+            // Don't add any conversations - they default to excluded
+            // Only save if this is the first time (no saved state)
+            const saved = localStorage.getItem('selectedContacts');
+            if (!saved) {
+                saveSelectedContacts();
+            }
         }
 
         // Toggle conversation selection
@@ -795,6 +825,9 @@
             } else {
                 selectedContacts.add(contact);
             }
+
+            // Save to localStorage
+            saveSelectedContacts();
 
             // Update the bar colors
             updateBarColors(contact, !isIncluded);
@@ -936,8 +969,16 @@
             `);
 
             try {
-                const response = await fetch(`/api/conversation/${encodeURIComponent(contactId)}`);
-                const data = await response.json();
+                // Check cache first
+                let data;
+                if (messageCache[contactId]) {
+                    data = messageCache[contactId];
+                } else {
+                    const response = await fetch(`/api/conversation/${encodeURIComponent(contactId)}`);
+                    data = await response.json();
+                    // Cache the messages
+                    messageCache[contactId] = data;
+                }
 
                 currentMessages = data.messages;
                 renderConversation(data.messages);
@@ -1041,15 +1082,18 @@
         async function drawAllSavedMarkers() {
             if (!svgElement || !yScaleGlobal || !xScaleGlobal) return;
 
+            // Only draw markers for conversations that are already cached (already opened)
             for (const contactId in conversationStarts) {
                 if (conversationStarts[contactId].length === 0) continue;
 
-                // Fetch messages for this contact
-                try {
-                    const response = await fetch(`/api/conversation/${encodeURIComponent(contactId)}`);
-                    const data = await response.json();
+                // Only draw if we have cached messages (user has opened this conversation)
+                if (!messageCache[contactId]) {
+                    console.log(`Skipping markers for ${contactId} - not yet cached`);
+                    continue;
+                }
 
-                    const messages = data.messages;
+                try {
+                    const messages = messageCache[contactId].messages;
                     if (!messages || messages.length === 0) continue;
 
                     const rowY = yScaleGlobal(contactId);

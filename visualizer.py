@@ -193,6 +193,10 @@ def get_formatted_conversation(contact_id):
         else:
             merged.append(msg)
 
+    # Remove 'rowid' field before returning (only keep role, text, date)
+    for msg in merged:
+        msg.pop('rowid', None)
+
     return merged
 
 def get_conversation_data():
