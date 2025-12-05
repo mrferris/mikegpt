@@ -249,7 +249,7 @@ class Model:
 
             elif token in [
                 "<|Liked|>",
-                "<|Laughed|>",
+                "<|Laughed at|>",
                 "<|Loved|>",
                 "<|Disliked|>",
                 "<|Questioned|>",
