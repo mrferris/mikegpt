@@ -70,8 +70,16 @@ def get_formatted_conversation(contact_id):
     Returns the conversation exactly as it would appear in training data.
     """
     conversation_messages = []
+    seen_messages = set()  # Track (db_path, rowid, date, text) tuples to prevent duplicates
+    debug_contact = contact_id == "+17132618883"  # Enable debug logging for this contact
+
+    if debug_contact:
+        print(f"\n=== DEBUG: Fetching conversation for {contact_id} ===")
+        print(f"Number of databases: {len(DB_PATHS)}")
 
     for db_path in DB_PATHS:
+        if debug_contact:
+            print(f"\n--- Processing database: {db_path} ---")
         if not os.path.exists(db_path):
             continue
 
@@ -119,6 +127,9 @@ def get_formatted_conversation(contact_id):
                 if contact_match != contact_id:
                     continue
 
+                if debug_contact:
+                    print(f"  Found matching chat_id: {chat_id} with {len(messages)} messages")
+
                 # Skip convos with yourself
                 if any(m[2] == SELF_ADDRESS for m in messages if m[2]):
                     continue
@@ -152,7 +163,20 @@ def get_formatted_conversation(contact_id):
                     if "\ufffd" in text or "�" in text:
                         continue
 
+                    # Create unique key: (date, is_from_me, text)
+                    # Same timestamp + sender + text = same message, regardless of DB/rowid
+                    message_key = (date, is_from_me, text)
+                    if message_key in seen_messages:
+                        if debug_contact and "instrumentals" in text.lower():
+                            print(f"  SKIPPING DUPLICATE: db={os.path.basename(db_path)}, rowid={rowid}, date={date}, text={text[:50]}")
+                        continue
+                    seen_messages.add(message_key)
+
                     role = ME_PATTERN if is_from_me else THEM_PATTERN
+
+                    if debug_contact and "instrumentals" in text.lower():
+                        print(f"  ADDING: rowid={rowid}, date={date}, from_me={is_from_me}, text={text[:50]}")
+
                     conversation_messages.append({
                         'role': role,
                         'text': text,
@@ -164,6 +188,15 @@ def get_formatted_conversation(contact_id):
         except Exception as e:
             print(f"Error reading database {db_path}: {e}")
             continue
+
+    # Sort all messages by date to ensure correct chronological order
+    conversation_messages.sort(key=lambda m: m['date'])
+
+    if debug_contact:
+        print(f"\n=== BEFORE MERGING: {len(conversation_messages)} messages ===")
+        for i, msg in enumerate(conversation_messages):
+            if "instrumentals" in msg['text'].lower():
+                print(f"  [{i}] {msg['role']}{msg['text'][:50]} (date: {msg['date']})")
 
     # Merge successive "Them:" messages only if within 1 hour
     from datetime import datetime, timedelta
@@ -192,6 +225,12 @@ def get_formatted_conversation(contact_id):
             merged[-1]['date'] = msg['date']
         else:
             merged.append(msg)
+
+    if debug_contact:
+        print(f"\n=== AFTER MERGING: {len(merged)} messages ===")
+        for i, msg in enumerate(merged):
+            if "instrumentals" in msg['text'].lower():
+                print(f"  [{i}] {msg['role']}{msg['text'][:50]} (date: {msg['date']})")
 
     # Remove 'rowid' field before returning (only keep role, text, date)
     for msg in merged:
