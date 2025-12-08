@@ -27,7 +27,7 @@ THEM_PATTERN = "<|Them|>"
 
 PRINTABLE = set(string.printable)
 
-def extract_text(row_text, row_attributed):
+def extract_text(row_text, row_attributed, rowid=None):
     """Get clean message text from iMessage DB row."""
     # First try the plain text field
     if row_text and row_text.strip():
@@ -37,31 +37,103 @@ def extract_text(row_text, row_attributed):
         return None
 
     try:
-        # Use PyObjC to properly deserialize the NSAttributedString
+        # Method 1: Try PyObjC approach
         from Foundation import NSData, NSKeyedUnarchiver
 
         # Convert bytes to NSData
         ns_data = NSData.dataWithBytes_length_(row_attributed, len(row_attributed))
 
-        # Unarchive the attributed string
-        unarchiver = NSKeyedUnarchiver.alloc().initForReadingWithData_(ns_data)
-        unarchiver.setRequiresSecureCoding_(False)
-        attributed_string = unarchiver.decodeObjectForKey_("root")
-        unarchiver.finishDecoding()
+        # Try the newer unarchiver API first
+        try:
+            attributed_string = NSKeyedUnarchiver.unarchivedObjectOfClass_fromData_error_(
+                None, ns_data, None
+            )[0]
+        except:
+            # Fall back to older API
+            unarchiver = NSKeyedUnarchiver.alloc().initForReadingWithData_(ns_data)
+            if unarchiver is None:
+                raise Exception("NSKeyedUnarchiver.alloc().initForReadingWithData_() returned None")
+            unarchiver.setRequiresSecureCoding_(False)
+            attributed_string = unarchiver.decodeObjectForKey_("root")
+            unarchiver.finishDecoding()
 
         if attributed_string is None:
-            return None
+            raise Exception("attributedBody extraction returned None")
 
         # Get the plain string from the attributed string
         text = attributed_string.string()
 
         if text:
             return text.strip()
-
-        return None
+        else:
+            raise Exception("attributedBody.string() was empty")
 
     except Exception as e:
-        # If PyObjC fails, return None
+        # Method 2: Fallback to binary parsing with proper understanding of NSKeyedArchiver format
+        try:
+            text_bytes = row_attributed
+            decoded = text_bytes.decode('utf-8', errors='ignore')
+
+            import re
+
+            # In NSKeyedArchiver binary plist format:
+            # Strings have a length prefix like: +<char> where the char encodes length
+            # The actual message text comes AFTER this prefix
+            #
+            # Pattern: NSString<binary markers>+<length_char><optional_junk>ACTUAL_TEXT
+            #
+            # Strategy: Find NSString markers, skip past any +<char> prefix, extract text
+
+            # Find all potential text chunks after NSString markers
+            parts = decoded.split('NSString')
+
+            candidates = []
+            for part in parts[1:]:  # Skip first part (before any NSString)
+                # Skip short parts (likely just metadata)
+                if len(part) < 10:
+                    continue
+
+                # Remove binary junk from the beginning (control chars)
+                cleaned = re.sub(r'^[\x00-\x1f\x7f-\x9f]+', '', part)
+
+                # Remove the length prefix pattern: +<single char><optional replacement char>
+                # This handles: +: +g +# etc.
+                cleaned = re.sub(r'^\+[\x00-\x7f][\ufffd\uFFFD]*', '', cleaned)
+
+                # Also remove any other common binary prefix patterns
+                cleaned = re.sub(r'^[\x80-\xff]+', '', cleaned)
+
+                # Now extract the actual message text (stop at next control char or metadata marker)
+                match = re.match(r'^([^\x00-\x08\x0b-\x0c\x0e-\x1f]+?)(?:[\x00-\x1f]|__kIM|NSDictionary|NSNumber|NSMutable|bplist|\$)', cleaned, re.UNICODE)
+
+                if match:
+                    text = match.group(1).strip()
+
+                    # Validate it looks like real message text
+                    if len(text) < 5:
+                        continue
+
+                    # Must have letters/numbers/emojis
+                    if not re.search(r'[\w😀-🙏🌀-🗿]', text, re.UNICODE):
+                        continue
+
+                    # Reject if it's mostly metadata
+                    if any(marker in text for marker in ['NSString', 'NSData', 'streamtyped', '__kIM']):
+                        continue
+
+                    candidates.append(text)
+
+            # Return the longest valid candidate
+            if candidates:
+                # Sort by length, prefer longer messages
+                candidates.sort(key=lambda x: len(x), reverse=True)
+                return candidates[0]
+
+        except Exception as e2:
+            pass
+
+        # If fallback parsing failed or returned nothing, skip this message
+        print(f"WARNING: Could not extract attributedBody for rowid={rowid}, skipping message")
         return None
 
 def get_formatted_conversation(contact_id):
@@ -136,7 +208,7 @@ def get_formatted_conversation(contact_id):
 
                 # Apply filters and format messages
                 for rowid, date, sender, text, attrib, is_from_me in messages:
-                    text = extract_text(text, attrib)
+                    text = extract_text(text, attrib, rowid)
 
                     if not text or not re.search(r"\S", text):
                         continue
