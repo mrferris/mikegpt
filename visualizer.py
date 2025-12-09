@@ -507,7 +507,13 @@ def generate_dataset():
     Request body should contain:
     - selected_contacts: list of contact IDs to include
     - conversation_starts: dict mapping contact_id -> list of message indices where to insert <|ConversationStart|>
+
+    Automatically inserts <|ConversationStart|> at:
+    1. Beginning of each conversation
+    2. After 72+ hour breaks in conversation
     """
+    from datetime import datetime, timedelta
+
     data = request.json
     selected_contacts = data.get('selected_contacts', [])
     conversation_starts = data.get('conversation_starts', {})
@@ -521,14 +527,33 @@ def generate_dataset():
             if not messages:
                 continue
 
-            # Get indices where we should insert <|ConversationStart|>
-            start_indices = set(conversation_starts.get(contact_id, []))
+            # Get manual indices where we should insert <|ConversationStart|>
+            manual_start_indices = set(conversation_starts.get(contact_id, []))
 
-            # Insert conversation start tokens (messages are already merged by get_formatted_conversation)
+            # Detect automatic conversation breaks (72+ hours)
+            auto_start_indices = set()
+            auto_start_indices.add(0)  # Always start at beginning
+
+            for idx in range(1, len(messages)):
+                try:
+                    prev_date = datetime.fromisoformat(messages[idx-1]['date'].replace(' ', 'T'))
+                    curr_date = datetime.fromisoformat(messages[idx]['date'].replace(' ', 'T'))
+                    time_diff = (curr_date - prev_date).total_seconds()
+
+                    # 72 hours = 259200 seconds
+                    if time_diff >= 259200:
+                        auto_start_indices.add(idx)
+                except:
+                    pass
+
+            # Combine manual and automatic indices
+            all_start_indices = manual_start_indices | auto_start_indices
+
+            # Insert conversation start tokens
             final_messages = []
             for idx, msg in enumerate(messages):
                 # Insert conversation start token if needed
-                if idx in start_indices:
+                if idx in all_start_indices:
                     final_messages.append({'role': '', 'text': '<|ConversationStart|>'})
                 final_messages.append(msg)
 
