@@ -139,7 +139,8 @@ def extract_text(row_text, row_attributed, rowid=None):
 def get_formatted_conversation(contact_id):
     """
     Fetch a single conversation with full message details and formatting.
-    Returns the conversation exactly as it would appear in training data.
+    Returns the conversation exactly as it would appear in training data,
+    including auto-added <|ConversationStart|> tokens.
     """
     conversation_messages = []
     seen_messages = set()  # Track (db_path, rowid, date, text) tuples to prevent duplicates
@@ -308,7 +309,30 @@ def get_formatted_conversation(contact_id):
     for msg in merged:
         msg.pop('rowid', None)
 
-    return merged
+    # Add auto-generated <|ConversationStart|> indices
+    # This detects where ConversationStart tokens WOULD be auto-added during generation
+    auto_start_indices = []
+    auto_start_indices.append(0)  # Always at beginning
+
+    # Detect 72+ hour breaks
+    for idx in range(1, len(merged)):
+        try:
+            prev_date = datetime.fromisoformat(merged[idx-1]['date'].replace(' ', 'T'))
+            curr_date = datetime.fromisoformat(merged[idx]['date'].replace(' ', 'T'))
+            time_diff = (curr_date - prev_date).total_seconds()
+
+            # 72 hours = 259200 seconds
+            if time_diff >= 259200:
+                auto_start_indices.append(idx)
+        except:
+            pass
+
+    # Add metadata about auto-start indices
+    # Frontend can use this to render them differently or pre-populate the UI
+    return {
+        'messages': merged,
+        'auto_conversation_starts': auto_start_indices
+    }
 
 def get_conversation_data():
     """Fetch conversation metadata for visualization from all databases."""
@@ -497,8 +521,8 @@ def data():
 @app.route('/api/conversation/<path:contact_id>')
 def conversation_detail(contact_id):
     """Get detailed formatted conversation for a specific contact."""
-    messages = get_formatted_conversation(contact_id)
-    return jsonify({'messages': messages})
+    result = get_formatted_conversation(contact_id)
+    return jsonify(result)
 
 @app.route('/api/generate-dataset', methods=['POST'])
 def generate_dataset():
@@ -522,7 +546,9 @@ def generate_dataset():
 
     with open(output_file, "w", encoding="utf-8") as f:
         for contact_id in selected_contacts:
-            messages = get_formatted_conversation(contact_id)
+            result = get_formatted_conversation(contact_id)
+            messages = result['messages']
+            auto_conversation_starts = result['auto_conversation_starts']
 
             if not messages:
                 continue
@@ -530,21 +556,8 @@ def generate_dataset():
             # Get manual indices where we should insert <|ConversationStart|>
             manual_start_indices = set(conversation_starts.get(contact_id, []))
 
-            # Detect automatic conversation breaks (72+ hours)
-            auto_start_indices = set()
-            auto_start_indices.add(0)  # Always start at beginning
-
-            for idx in range(1, len(messages)):
-                try:
-                    prev_date = datetime.fromisoformat(messages[idx-1]['date'].replace(' ', 'T'))
-                    curr_date = datetime.fromisoformat(messages[idx]['date'].replace(' ', 'T'))
-                    time_diff = (curr_date - prev_date).total_seconds()
-
-                    # 72 hours = 259200 seconds
-                    if time_diff >= 259200:
-                        auto_start_indices.add(idx)
-                except:
-                    pass
+            # Get auto-generated indices
+            auto_start_indices = set(auto_conversation_starts)
 
             # Combine manual and automatic indices
             all_start_indices = manual_start_indices | auto_start_indices

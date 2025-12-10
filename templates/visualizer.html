@@ -959,7 +959,7 @@
                     <div>
                         <h2>${contactId}</h2>
                         <button id="inclusion-toggle" class="inclusion-toggle ${isIncluded ? 'included' : 'excluded'}" onclick="toggleConversation('${escapedContactId}')">${isIncluded ? 'Included' : 'Excluded'}</button>
-                        <div class="detail-hint">Click a message, press <span class="key">c</span> to insert &lt;|ConversationStart|&gt; • Press <span class="key">Backspace</span> to remove • <span class="key">Shift+Backspace</span> to clear all • Press <span class="key">Esc</span> to close</div>
+                        <div class="detail-hint">&lt;|ConversationStart|&gt; tokens are auto-added at the beginning and after 72h breaks • Click a message, press <span class="key">c</span> to add more • Press <span class="key">Backspace</span> to remove • <span class="key">Shift+Backspace</span> to clear all • Press <span class="key">Esc</span> to close</div>
                     </div>
                     <div>
                         <button class="close-btn" onclick="closeDetailView()">✕</button>
@@ -981,6 +981,14 @@
                 }
 
                 currentMessages = data.messages;
+
+                // Initialize conversationStarts with auto-generated ones if not already set
+                if (!conversationStarts[contactId]) {
+                    conversationStarts[contactId] = [...data.auto_conversation_starts];
+                    saveConversationStarts();
+                    console.log(`Initialized conversation starts for ${contactId}:`, conversationStarts[contactId]);
+                }
+
                 renderConversation(data.messages);
 
                 // Create scroll indicator on the bar
