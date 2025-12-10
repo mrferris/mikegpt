@@ -527,59 +527,80 @@ def conversation_detail(contact_id):
 @app.route('/api/generate-dataset', methods=['POST'])
 def generate_dataset():
     """
-    Generate training data file based on selected conversations and custom tokens.
+    Generate training and validation data files based on selected conversations and custom tokens.
     Request body should contain:
-    - selected_contacts: list of contact IDs to include
+    - selected_contacts: list of contact IDs to include in training
+    - validation_contacts: list of contact IDs to include in validation
     - conversation_starts: dict mapping contact_id -> list of message indices where to insert <|ConversationStart|>
 
     Automatically inserts <|ConversationStart|> at:
     1. Beginning of each conversation
     2. After 72+ hour breaks in conversation
     """
-    from datetime import datetime, timedelta
-
     data = request.json
     selected_contacts = data.get('selected_contacts', [])
+    validation_contacts = data.get('validation_contacts', [])
     conversation_starts = data.get('conversation_starts', {})
 
-    output_file = "imessages_dataset.txt"
+    # Create output directory if it doesn't exist
+    output_dir = "data/text_data"
+    os.makedirs(output_dir, exist_ok=True)
 
-    with open(output_file, "w", encoding="utf-8") as f:
-        for contact_id in selected_contacts:
-            result = get_formatted_conversation(contact_id)
-            messages = result['messages']
-            auto_conversation_starts = result['auto_conversation_starts']
+    train_output_file = os.path.join(output_dir, "imessages_dataset.txt")
+    val_output_file = os.path.join(output_dir, "imessages_validation.txt")
 
-            if not messages:
-                continue
+    def write_conversations(contacts, output_file):
+        """Helper to write conversations to a file."""
+        with open(output_file, "w", encoding="utf-8") as f:
+            for contact_id in contacts:
+                result = get_formatted_conversation(contact_id)
+                messages = result['messages']
+                auto_conversation_starts = result['auto_conversation_starts']
 
-            # Get manual indices where we should insert <|ConversationStart|>
-            manual_start_indices = set(conversation_starts.get(contact_id, []))
+                if not messages:
+                    continue
 
-            # Get auto-generated indices
-            auto_start_indices = set(auto_conversation_starts)
+                # Get manual indices where we should insert <|ConversationStart|>
+                manual_start_indices = set(conversation_starts.get(contact_id, []))
 
-            # Combine manual and automatic indices
-            all_start_indices = manual_start_indices | auto_start_indices
+                # Get auto-generated indices
+                auto_start_indices = set(auto_conversation_starts)
 
-            # Insert conversation start tokens
-            final_messages = []
-            for idx, msg in enumerate(messages):
-                # Insert conversation start token if needed
-                if idx in all_start_indices:
-                    final_messages.append({'role': '', 'text': '<|ConversationStart|>'})
-                final_messages.append(msg)
+                # Combine manual and automatic indices
+                all_start_indices = manual_start_indices | auto_start_indices
 
-            # Write to file
-            for msg in final_messages:
-                if msg['role']:  # Normal message
-                    f.write(f"{msg['role']}{msg['text']}")
-                else:  # Special token
-                    f.write(msg['text'])
+                # Insert conversation start tokens
+                final_messages = []
+                for idx, msg in enumerate(messages):
+                    # Insert conversation start token if needed
+                    if idx in all_start_indices:
+                        final_messages.append({'role': '', 'text': '<|ConversationStart|>'})
+                    final_messages.append(msg)
 
-            f.write("<|endoftext|>")  # End of conversation marker
+                # Write to file
+                for msg in final_messages:
+                    if msg['role']:  # Normal message
+                        f.write(f"{msg['role']}{msg['text']}")
+                    else:  # Special token
+                        f.write(msg['text'])
 
-    return send_file(output_file, as_attachment=True, download_name=output_file)
+                f.write("<|endoftext|>")  # End of conversation marker
+
+    # Write training data
+    write_conversations(selected_contacts, train_output_file)
+
+    # Write validation data if there are validation contacts
+    if validation_contacts:
+        write_conversations(validation_contacts, val_output_file)
+
+    # Return success with file paths
+    return jsonify({
+        'success': True,
+        'training_file': train_output_file,
+        'validation_file': val_output_file if validation_contacts else None,
+        'training_count': len(selected_contacts),
+        'validation_count': len(validation_contacts)
+    })
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Visualize iMessage conversations from one or more databases')

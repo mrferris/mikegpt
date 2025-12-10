@@ -345,6 +345,12 @@
             background: rgba(239, 68, 68, 0.1);
         }
 
+        .inclusion-toggle.validation {
+            border-color: #f59e0b;
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+
         .inclusion-toggle:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -483,6 +489,10 @@
                 <div class="legend-item">
                     <div class="legend-dot" style="background: #f093fb;"></div>
                     <span>Received</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #f59e0b;"></div>
+                    <span>Validation</span>
                 </div>
             </div>
             <div id="chart"></div>
@@ -727,8 +737,9 @@
                 // Append dots to the contact row group
                 const rowGroup = d3.selectAll('.contact-row').filter((d, idx) => idx === i);
 
-                // Check if this conversation is excluded
+                // Check conversation state
                 const isIncluded = selectedContacts.has(conv.contact);
+                const isValidation = validationContacts.has(conv.contact);
 
                 rowGroup.selectAll('circle')
                     .data(sampledMessages)
@@ -739,8 +750,16 @@
                     .attr('cy', yScale(conv.contact) + yScale.bandwidth() / 2)
                     .attr('r', 1.5)
                     .attr('fill', d => {
-                        if (!isIncluded) return '#555'; // Grey when excluded
-                        return d.fromMe ? '#667eea' : '#f093fb'; // Normal colors
+                        if (isValidation) {
+                            // Orange for validation
+                            return d.fromMe ? '#f59e0b' : '#fbbf24';
+                        } else if (isIncluded) {
+                            // Blue/pink for training
+                            return d.fromMe ? '#667eea' : '#f093fb';
+                        } else {
+                            // Grey for excluded
+                            return '#555';
+                        }
                     });
             });
         }
@@ -751,7 +770,8 @@
 
     <script>
         // Track selected conversations and custom tokens
-        let selectedContacts = new Set();
+        let selectedContacts = new Set(); // Training set
+        let validationContacts = new Set(); // Validation set
         let conversationStarts = {}; // contact_id -> [message_indices]
         let currentDetailContact = null;
         let allConversations = []; // Store all conversations for stats
@@ -795,11 +815,23 @@
                     selectedContacts = new Set();
                 }
             }
+
+            const savedVal = localStorage.getItem('validationContacts');
+            if (savedVal) {
+                try {
+                    const savedArray = JSON.parse(savedVal);
+                    validationContacts = new Set(savedArray);
+                } catch (e) {
+                    console.error('Error loading validation contacts:', e);
+                    validationContacts = new Set();
+                }
+            }
         }
 
         // Save selectedContacts to localStorage
         function saveSelectedContacts() {
             localStorage.setItem('selectedContacts', JSON.stringify(Array.from(selectedContacts)));
+            localStorage.setItem('validationContacts', JSON.stringify(Array.from(validationContacts)));
         }
 
         // Initialize on load
@@ -816,13 +848,19 @@
             }
         }
 
-        // Toggle conversation selection
+        // Toggle conversation between excluded and training
         function toggleConversation(contact) {
             const isIncluded = selectedContacts.has(contact);
+            const isValidation = validationContacts.has(contact);
 
             if (isIncluded) {
+                // Currently in training -> move to excluded
                 selectedContacts.delete(contact);
+            } else if (isValidation) {
+                // Currently in validation -> move to excluded
+                validationContacts.delete(contact);
             } else {
+                // Currently excluded -> move to training
                 selectedContacts.add(contact);
             }
 
@@ -830,20 +868,54 @@
             saveSelectedContacts();
 
             // Update the bar colors
-            updateBarColors(contact, !isIncluded);
+            updateBarColors(contact);
 
             // Update stats
             updateStats();
 
-            // Update toggle button if detail view is open
+            // Update toggle buttons if detail view is open
             updateInclusionToggle(contact);
 
-            return !isIncluded; // Return new state
+            return selectedContacts.has(contact);
+        }
+
+        // Toggle conversation to validation set
+        function toggleValidation(contact) {
+            const isIncluded = selectedContacts.has(contact);
+            const isValidation = validationContacts.has(contact);
+
+            if (isValidation) {
+                // Currently in validation -> move to excluded
+                validationContacts.delete(contact);
+            } else {
+                // Move to validation (remove from training if present)
+                if (isIncluded) {
+                    selectedContacts.delete(contact);
+                }
+                validationContacts.add(contact);
+            }
+
+            // Save to localStorage
+            saveSelectedContacts();
+
+            // Update the bar colors
+            updateBarColors(contact);
+
+            // Update stats
+            updateStats();
+
+            // Update toggle buttons if detail view is open
+            updateInclusionToggle(contact);
+
+            return validationContacts.has(contact);
         }
 
         // Update bar colors based on inclusion state
-        function updateBarColors(contact, isIncluded) {
+        function updateBarColors(contact) {
             if (!svgElement) return;
+
+            const isIncluded = selectedContacts.has(contact);
+            const isValidation = validationContacts.has(contact);
 
             svgElement.selectAll('.contact-row')
                 .filter(d => d.contact === contact)
@@ -851,49 +923,76 @@
                 .transition()
                 .duration(200)
                 .attr('fill', d => {
-                    if (!isIncluded) return '#555'; // Grey when excluded
-                    return d.fromMe ? '#667eea' : '#f093fb'; // Normal colors
+                    if (isValidation) {
+                        // Orange for validation set
+                        return d.fromMe ? '#f59e0b' : '#fbbf24';
+                    } else if (isIncluded) {
+                        // Blue/pink for training set
+                        return d.fromMe ? '#667eea' : '#f093fb';
+                    } else {
+                        // Grey for excluded
+                        return '#555';
+                    }
                 });
         }
 
-        // Update inclusion toggle button
+        // Update inclusion toggle buttons
         function updateInclusionToggle(contact) {
             if (currentDetailContact !== contact) return;
 
-            const toggleBtn = document.getElementById('inclusion-toggle');
-            if (!toggleBtn) return;
+            const trainingBtn = document.getElementById('training-toggle');
+            const validationBtn = document.getElementById('validation-toggle');
+
+            if (!trainingBtn || !validationBtn) return;
 
             const isIncluded = selectedContacts.has(contact);
-            toggleBtn.className = `inclusion-toggle ${isIncluded ? 'included' : 'excluded'}`;
-            toggleBtn.textContent = isIncluded ? 'Included' : 'Excluded';
+            const isValidation = validationContacts.has(contact);
+
+            // Update training button
+            if (isIncluded) {
+                trainingBtn.className = 'inclusion-toggle included';
+                trainingBtn.textContent = 'Training: Included';
+            } else {
+                trainingBtn.className = 'inclusion-toggle excluded';
+                trainingBtn.textContent = 'Training: Excluded';
+            }
+
+            // Update validation button
+            if (isValidation) {
+                validationBtn.className = 'inclusion-toggle validation';
+                validationBtn.textContent = 'Validation: Included';
+            } else {
+                validationBtn.className = 'inclusion-toggle excluded';
+                validationBtn.textContent = 'Validation: Excluded';
+            }
         }
 
         // Update stats based on selected conversations
         function updateStats() {
-            const selectedConvs = allConversations.filter(c => selectedContacts.has(c.contact));
-            const selectedMessages = allMessages.filter(m => selectedContacts.has(m.contact));
+            const trainingConvs = allConversations.filter(c => selectedContacts.has(c.contact));
+            const trainingMessages = allMessages.filter(m => selectedContacts.has(m.contact));
+            const trainingSent = trainingMessages.filter(m => m.fromMe).length;
+            const trainingReceived = trainingMessages.length - trainingSent;
 
-            const totalContacts = selectedConvs.length;
-            const totalMessages = selectedMessages.length;
-            const sentMessages = selectedMessages.filter(m => m.fromMe).length;
-            const receivedMessages = totalMessages - sentMessages;
+            const validationConvs = allConversations.filter(c => validationContacts.has(c.contact));
+            const validationMessages = allMessages.filter(m => validationContacts.has(m.contact));
+            const validationSent = validationMessages.filter(m => m.fromMe).length;
+            const validationReceived = validationMessages.length - validationSent;
 
             document.getElementById('stats').innerHTML = `
                 <div class="stat-card">
-                    <div class="stat-value">${totalContacts.toLocaleString()}</div>
-                    <div class="stat-label">Conversations</div>
+                    <div class="stat-value">${trainingConvs.length.toLocaleString()}</div>
+                    <div class="stat-label">Training Conversations</div>
+                    <div class="stat-label" style="margin-top: 0.5rem; color: #888; font-size: 0.8rem;">
+                        ${trainingSent.toLocaleString()} sent • ${trainingReceived.toLocaleString()} received
+                    </div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">${totalMessages.toLocaleString()}</div>
-                    <div class="stat-label">Total Messages</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${sentMessages.toLocaleString()}</div>
-                    <div class="stat-label">Sent</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${receivedMessages.toLocaleString()}</div>
-                    <div class="stat-label">Received</div>
+                    <div class="stat-value">${validationConvs.length.toLocaleString()}</div>
+                    <div class="stat-label">Validation Conversations</div>
+                    <div class="stat-label" style="margin-top: 0.5rem; color: #888; font-size: 0.8rem;">
+                        ${validationSent.toLocaleString()} sent • ${validationReceived.toLocaleString()} received
+                    </div>
                 </div>
             `;
         }
@@ -953,12 +1052,20 @@
                 .style('overflow-y', 'auto');
 
             const isIncluded = selectedContacts.has(contactId);
+            const isValidation = validationContacts.has(contactId);
             const escapedContactId = contactId.replace(/'/g, "\\'");
+
+            const trainingClass = isIncluded ? 'included' : 'excluded';
+            const trainingText = isIncluded ? 'Training: Included' : 'Training: Excluded';
+            const validationClass = isValidation ? 'validation' : 'excluded';
+            const validationText = isValidation ? 'Validation: Included' : 'Validation: Excluded';
+
             detailDiv.html(`
                 <div class="detail-header">
                     <div>
                         <h2>${contactId}</h2>
-                        <button id="inclusion-toggle" class="inclusion-toggle ${isIncluded ? 'included' : 'excluded'}" onclick="toggleConversation('${escapedContactId}')">${isIncluded ? 'Included' : 'Excluded'}</button>
+                        <button id="training-toggle" class="inclusion-toggle ${trainingClass}" onclick="toggleConversation('${escapedContactId}')">${trainingText}</button>
+                        <button id="validation-toggle" class="inclusion-toggle ${validationClass}" onclick="toggleValidation('${escapedContactId}')">${validationText}</button>
                         <div class="detail-hint">&lt;|ConversationStart|&gt; tokens are auto-added at the beginning and after 72h breaks • Click a message, press <span class="key">c</span> to add more • Press <span class="key">Backspace</span> to remove • <span class="key">Shift+Backspace</span> to clear all • Press <span class="key">Esc</span> to close</div>
                     </div>
                     <div>
@@ -1428,22 +1535,21 @@
                     },
                     body: JSON.stringify({
                         selected_contacts: Array.from(selectedContacts),
+                        validation_contacts: Array.from(validationContacts),
                         conversation_starts: conversationStarts
                     })
                 });
 
                 if (!response.ok) throw new Error('Failed to generate dataset');
 
-                // Download the file
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'imessages_dataset.txt';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
+                const result = await response.json();
+
+                // Show success message
+                let message = `Generated ${result.training_count} training conversation(s) → ${result.training_file}`;
+                if (result.validation_file) {
+                    message += `\n${result.validation_count} validation conversation(s) → ${result.validation_file}`;
+                }
+                alert(message);
 
                 btn.textContent = 'Generate Training Data';
                 btn.disabled = false;
