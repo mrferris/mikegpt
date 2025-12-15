@@ -210,7 +210,7 @@
 
         /* Position loading screen as input bar in light mode */
         body.light-mode #loading-screen {
-            position: absolute;
+            position: fixed;
             bottom: 8px;
             left: 12px;
             right: 12px;
@@ -221,10 +221,12 @@
             padding: 8px 0;
             z-index: 300;
             justify-content: flex-start;
+            flex-direction: column;
+            gap: 10px;
         }
 
         body.light-mode #loading-screen.hidden {
-            display: flex;
+            display: none;
         }
 
         body.light-mode .input-wrapper-drive {
@@ -235,6 +237,24 @@
             padding: 6px 6px 6px 12px;
             gap: 8px;
             width: 100%;
+            position: relative;
+        }
+
+        body.light-mode .input-wrapper-drive .enter-hint {
+            position: static;
+            margin-left: auto;
+            color: #999;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            font-size: 13px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        body.light-mode .input-wrapper-drive:has(input:not(:placeholder-shown)) .enter-hint {
+            opacity: 1;
         }
 
         body.light-mode .input-icon {
@@ -262,43 +282,12 @@
             margin: 0;
         }
 
-        body.light-mode .send-button-drive {
-            background: #007AFF;
-            border: none;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            min-width: 32px;
-            min-height: 32px;
-            display: flex;
-            align-items: center;
+        body.light-mode .sampling-toggle-container {
             justify-content: center;
-            cursor: pointer;
-            transition: background 0.2s;
-            flex-shrink: 0;
-            padding: 0;
-        }
-
-        body.light-mode .send-button-drive:hover {
-            background: #0051D5;
-        }
-
-        body.light-mode .send-button-drive svg {
-            width: 18px;
-            height: 18px;
-            margin-left: 2px;
         }
 
         body.light-mode .controls {
-            display: none;
-        }
-
-        body.light-mode .start-btn {
-            display: none;
-        }
-
-        body.light-mode #error-container {
-            display: none;
+            display: none !important;
         }
 
         /* Normal mode (dark mode): show plain input, hide wrapper */
@@ -306,7 +295,7 @@
             background: #111;
             border: 2px solid #333;
             color: #fff;
-            padding: 15px 20px;
+            padding: 15px 60px 15px 20px;
             font-size: 18px;
             width: 500px;
             border-radius: 8px;
@@ -338,16 +327,21 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #000;
+            background: transparent;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
+            z-index: 100;
+            pointer-events: none;
         }
 
         #loading-screen.hidden {
             display: none;
+        }
+
+        #loading-screen > * {
+            pointer-events: auto;
         }
 
         .controls {
@@ -403,16 +397,12 @@
         }
 
         #game-container {
-            display: none;
+            display: block;
             width: 100%;
             height: 100vh;
             position: relative;
             perspective: 1500px;
             perspective-origin: 50% 40%;
-        }
-
-        #game-container.active {
-            display: block;
         }
 
         .level-container {
@@ -423,14 +413,57 @@
             justify-content: center;
             align-items: center;
             transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s;
+            will-change: transform, opacity;
         }
+
 
         .carousel {
             display: flex;
-            gap: 30px;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             position: relative;
+            width: 100%;
+            overflow: visible;
+        }
+
+        .carousel-track {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            /* Will be positioned via transform to center current page */
+            will-change: transform;
+        }
+
+        .carousel-track.animating {
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s ease;
+        }
+
+        .page-separator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            /* No margin - rely on flex gap for spacing */
+        }
+
+        .page-separator-line {
+            width: 2px;
+            height: 60px;
+            border-left: 2px dashed rgba(255, 255, 255, 0.3);
+        }
+
+        .page-separator-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+        }
+
+        body.light-mode .page-separator-line {
+            border-left-color: rgba(0, 0, 0, 0.3);
+        }
+
+        body.light-mode .page-separator-label {
+            color: rgba(0, 0, 0, 0.5);
         }
 
         .token-card {
@@ -441,7 +474,7 @@
             min-width: 200px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             backdrop-filter: blur(10px);
         }
@@ -463,6 +496,15 @@
             opacity: 0.4;
             transform: scale(0.95);
         }
+
+        .token-card.out-of-policy.dimmed {
+            opacity: 0.3;
+        }
+
+        .token-card.out-of-policy:not(.dimmed):not(.active) {
+            opacity: 0.6;
+        }
+
 
         .token-text {
             font-size: 32px;
@@ -599,6 +641,248 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
         }
 
+        body.light-mode .title {
+            color: #000;
+        }
+
+        /* Sampling method toggle */
+        .sampling-toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+            margin-bottom: 20px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 180px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .toggle-option {
+            position: absolute;
+            width: 85px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 2;
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            transition: color 0.3s;
+        }
+
+        .toggle-option.left {
+            left: 2px;
+        }
+
+        .toggle-option.right {
+            right: 2px;
+        }
+
+        .toggle-switch:not(.active) .toggle-option.left {
+            color: #000;
+        }
+
+        .toggle-switch.active .toggle-option.right {
+            color: #000;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 85px;
+            height: 36px;
+            background: #fff;
+            border-radius: 18px;
+            transition: transform 0.3s;
+            z-index: 1;
+        }
+
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(91px);
+        }
+
+        .sampling-param-box {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            gap: 2px;
+            min-width: 70px;
+        }
+
+        .param-prefix {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 16px;
+            font-weight: 600;
+            user-select: none;
+        }
+
+        .param-input {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            width: 30px;
+            outline: none;
+            text-align: left;
+        }
+
+        body.light-mode .toggle-switch {
+            background: #F0F0F0;
+            border-color: #d1d1d1;
+        }
+
+        body.light-mode .toggle-option {
+            color: rgba(0, 0, 0, 0.3);
+        }
+
+        body.light-mode .toggle-slider {
+            background: #007AFF;
+        }
+
+        body.light-mode .toggle-switch:not(.active) .toggle-option.left {
+            color: #fff;
+        }
+
+        body.light-mode .toggle-switch.active .toggle-option.right {
+            color: #fff;
+        }
+
+        body.light-mode .sampling-param-box {
+            background: #F0F0F0;
+            border-color: #d1d1d1;
+        }
+
+        body.light-mode .param-prefix {
+            color: rgba(0, 0, 0, 0.4);
+        }
+
+        body.light-mode .param-input {
+            color: #000;
+        }
+
+        .prompt-container {
+            position: relative;
+            width: 500px;
+            display: inline-block;
+        }
+
+        .enter-hint {
+            position: absolute;
+            right: 20px;
+            top: 18px;
+            color: #666;
+            font-size: 13px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .prompt-container:has(input:not(:placeholder-shown)) .enter-hint {
+            opacity: 1;
+        }
+
+        body.light-mode .enter-hint {
+            color: #999;
+        }
+
+        /* RL method toggle */
+        .rl-method-toggle {
+            position: fixed;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: none;
+            gap: 15px;
+        }
+
+        .rl-method-toggle.visible {
+            display: flex;
+        }
+
+        .rl-method-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 12px 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .rl-method-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .rl-method-btn.active {
+            background: #fff;
+            color: #000;
+            border-color: #fff;
+        }
+
+        body.light-mode .rl-method-btn {
+            background: #F0F0F0;
+            border: 2px solid #d1d1d1;
+            color: #000;
+        }
+
+        body.light-mode .rl-method-btn:hover {
+            border-color: #007AFF;
+        }
+
+        body.light-mode .rl-method-btn.active {
+            background: #007AFF;
+            color: #fff;
+            border-color: #007AFF;
+        }
+
+        /* Ranking view (GRPO mode) */
+        .ranking-view {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ranking-view.visible {
+            display: block;
+        }
+
+        /* Token explorer container */
+        .token-explorer {
+            display: none;
+        }
+
+        .token-explorer.visible {
+            display: block;
+        }
+
+        .token-explorer.hidden {
+            display: none;
+        }
+
         .error-message {
             color: #f44;
             margin-top: 20px;
@@ -606,6 +890,16 @@
             background: rgba(255, 68, 68, 0.1);
             border: 1px solid rgba(255, 68, 68, 0.3);
             border-radius: 8px;
+            max-width: 500px;
+        }
+
+        #error-container {
+            margin-top: 10px;
+            min-height: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            white-space: nowrap;
         }
 
         .selection-controls {
@@ -827,37 +1121,52 @@
 </head>
 <body>
     <div id="loading-screen">
-        <input type="text" class="prompt-input" id="prompt" placeholder="Enter your prompt..." value="Hello">
+        <div class="prompt-container">
+            <input type="text" class="prompt-input" id="prompt" placeholder="Enter your prompt..." autofocus>
+            <span class="enter-hint">ENTER</span>
+        </div>
 
         <div class="input-wrapper-drive">
             <button class="input-icon">+</button>
-            <input type="text" class="prompt-input-imessage" id="prompt-imessage" placeholder="Enter your prompt..." value="Hello">
-            <button class="send-button-drive" id="send-button-drive">
-                <svg width="22" height="22" viewBox="0 0 22 22">
-                    <path d="M2 10.5 L20 10.5 M20 10.5 L13 3.5 M20 10.5 L13 17.5"
-                          fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </button>
+            <input type="text" class="prompt-input-imessage" id="prompt-imessage" placeholder="Enter your prompt..." autofocus>
+            <span class="enter-hint">ENTER</span>
         </div>
 
-        <div class="controls">
+        <div class="sampling-toggle-container">
+            <div class="toggle-switch" id="sampling-toggle" onclick="toggleSamplingMethod()">
+                <div class="toggle-slider"></div>
+                <span class="toggle-option left">Top-K</span>
+                <span class="toggle-option right">Top-P</span>
+            </div>
+            <div class="sampling-param-box">
+                <span class="param-prefix" id="param-prefix">k=</span>
+                <input type="text" class="param-input" id="param-input" value="5">
+            </div>
+        </div>
+
+        <div class="controls" style="display: none;">
             <div>
                 <div class="control-label">K (branches)</div>
-                <input type="number" class="control-input" id="k-value" min="1" max="20" value="5">
+                <input type="number" class="control-input" id="k-value" min="1" max="20" value="3">
             </div>
-            <div>
+            <div style="display: none;">
                 <div class="control-label">N (depth)</div>
-                <input type="number" class="control-input" id="n-value" min="1" max="10" value="5">
+                <input type="number" class="control-input" id="n-value" min="1" max="10" value="4">
             </div>
         </div>
 
-        <button class="start-btn" id="start-btn" onclick="startDrive()">START</button>
         <div id="error-container"></div>
     </div>
 
     <div id="game-container">
         <div class="title">MikeRL</div>
 
+        <div class="rl-method-toggle" id="rl-method-toggle">
+            <button class="rl-method-btn active" id="dpo-btn" onclick="setRLMethod('dpo')">DPO</button>
+            <button class="rl-method-btn" id="grpo-btn" onclick="setRLMethod('grpo')">GRPO</button>
+        </div>
+
+        <div class="token-explorer" id="token-explorer">
         <div class="path-display" id="path-display">
             <div class="depth-section">
                 <div class="depth-label">Depth</div>
@@ -915,6 +1224,11 @@
             </div>
             <div class="history-list" id="history-list"></div>
         </div>
+        </div>
+
+        <div class="ranking-view" id="ranking-view">
+            <!-- GRPO ranking interface will go here -->
+        </div>
     </div>
 
     <script>
@@ -927,13 +1241,61 @@
         }
 
         let treeData = null;
+        let originalPrompt = null; // Store the original user prompt (without special tokens)
         let currentPath = [];
         let currentIndex = 0;
         let selectedPaths = [];
         let trainingHistory = [];
-        let initialK = 5; // Initial K value
-        let initialN = 5; // Initial N value
+        let initialK = 5; // Policy boundary (user's k value)
+        let totalK = 5; // Total tokens currently visible
+        let initialN = 4; // Initial N value (static)
         let loadedDepths = new Set(); // Track which depth layers we've already loaded
+        let samplingMethod = 'topk'; // 'topk' or 'topp'
+        let rlMethod = 'dpo'; // 'dpo' or 'grpo'
+        let currentPage = 0; // Current page of tokens being viewed (0-indexed)
+        let loadedPageDepths = new Set(); // Track which pages have COMPLETED depth loading
+        let loadingPageDepths = new Set(); // Track which pages are CURRENTLY loading depths
+        let loadedPages = new Set(); // Track which pages have been loaded
+        let isLoadingNextLayer = false; // Prevent cascading loads
+        let isAnimating = false; // Prevent re-renders during page transition animation
+        let animationTimeoutId = null; // Track animation timeout for cancellation
+
+        function toggleSamplingMethod() {
+            samplingMethod = samplingMethod === 'topk' ? 'topp' : 'topk';
+            const toggle = document.getElementById('sampling-toggle');
+            const prefix = document.getElementById('param-prefix');
+            const input = document.getElementById('param-input');
+
+            if (samplingMethod === 'topp') {
+                toggle.classList.add('active');
+                prefix.textContent = 'p=';
+                input.value = '0.9';
+            } else {
+                toggle.classList.remove('active');
+                prefix.textContent = 'k=';
+                input.value = '5';
+            }
+        }
+
+        function setRLMethod(method) {
+            rlMethod = method;
+            document.getElementById('dpo-btn').classList.toggle('active', method === 'dpo');
+            document.getElementById('grpo-btn').classList.toggle('active', method === 'grpo');
+
+            // Toggle views
+            const tokenExplorer = document.getElementById('token-explorer');
+            const rankingView = document.getElementById('ranking-view');
+
+            if (method === 'dpo') {
+                tokenExplorer.classList.add('visible');
+                tokenExplorer.classList.remove('hidden');
+                rankingView.classList.remove('visible');
+            } else {
+                tokenExplorer.classList.remove('visible');
+                tokenExplorer.classList.add('hidden');
+                rankingView.classList.add('visible');
+            }
+        }
 
         async function startDrive() {
             // Check if we're in light mode and use the appropriate input
@@ -942,17 +1304,20 @@
                 document.getElementById('prompt-imessage') :
                 document.getElementById('prompt');
             const prompt = promptInput.value;
-            const k = parseInt(document.getElementById('k-value').value);
+
+            // Get k or p value based on sampling method
+            const paramValue = parseFloat(document.getElementById('param-input').value);
+            const userK = samplingMethod === 'topk' ? Math.round(paramValue) : 20; // User's k for top-p threshold
+            const k = userK; // Only fetch k initially for fast load
             const n = parseInt(document.getElementById('n-value').value);
 
+            // Store the policy boundary and total k for rendering
+            initialK = userK;
+            totalK = userK; // Start by only showing in-policy tokens
+
             if (!prompt.trim()) {
-                showError('Please enter a prompt');
                 return;
             }
-
-            const btn = document.getElementById('start-btn');
-            btn.disabled = true;
-            btn.textContent = 'LOADING...';
 
             const errorContainer = document.getElementById('error-container');
             errorContainer.innerHTML = '<div class="loading-text">Building token tree...</div>';
@@ -973,14 +1338,14 @@
                 }
 
                 treeData = data;
+                originalPrompt = prompt; // Store the original user prompt
                 initialK = k;
                 initialN = n;
+                console.log('Initial tree loaded with', k, 'tokens');
                 startGame();
 
             } catch (error) {
                 showError(error.message);
-                btn.disabled = false;
-                btn.textContent = 'START';
             }
         }
 
@@ -991,13 +1356,299 @@
 
         function startGame() {
             document.getElementById('loading-screen').classList.add('hidden');
-            document.getElementById('game-container').classList.add('active');
+            document.getElementById('rl-method-toggle').classList.add('visible');
+            document.getElementById('token-explorer').classList.add('visible');
             currentPath = [];
             currentIndex = 0;
+            currentPage = 0;
             selectedPaths = [];
-            loadedDepths = new Set(); // Reset loaded depths
+            loadedDepths = new Set();
+            loadedPageDepths = new Set([0]); // Only page 0 depths are loaded initially
+            loadingPageDepths = new Set(); // No pages currently loading
+            loadedPages = new Set([0]); // Only page 0 is fully loaded initially
+            isLoadingNextLayer = false;
+            isAnimating = false;
+            animationTimeoutId = null;
+            totalK = initialK; // Start with just initialK tokens visible
+
+            // Set initial RL method state
+            setRLMethod('dpo');
+
+            // Render
             renderLevels();
             updatePathDisplay();
+
+            // Load second page tokens (first layer immediately, depths in background)
+            loadSecondPageTokens();
+        }
+
+        async function loadSecondPageTokens() {
+            // Load second k tokens (first layer only) immediately
+            try {
+                console.log('Loading second page tokens (first layer)...');
+
+                const response = await fetch('/api/beam-tree', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: originalPrompt,
+                        k: initialK * 2,  // Load 2k tokens
+                        n: 1  // Only first layer for new tokens
+                    })
+                });
+
+                const newData = await response.json();
+                if (response.ok) {
+                    console.log('✓ Loaded second page first layer');
+
+                    // Merge: keep first k's deep children, add second k's first layer
+                    for (let i = initialK; i < newData.children.length; i++) {
+                        // Add new tokens (they only have first layer)
+                        treeData.children[i] = newData.children[i];
+                    }
+
+                    totalK = initialK * 2;
+                    loadedPages.add(1); // Mark page 1 first layer as loaded
+                    renderLevels();
+
+                    // Preload full depth for page 1 in background (all 4 layers)
+                    preloadPageFullDepth(1);
+                }
+            } catch (error) {
+                console.error('Error loading second page tokens:', error);
+            }
+        }
+
+        // Preload full depth (all 4 layers) for a page in the background
+        async function preloadPageFullDepth(pageNum) {
+            // Skip if page doesn't exist yet
+            if (pageNum * initialK >= totalK) return;
+
+            // First ensure root children are loaded
+            await loadPageDepths(pageNum);
+
+            const pageStart = pageNum * initialK;
+            const pageEnd = Math.min(pageStart + initialK, totalK);
+
+            // Load depth 2: grandchildren (children of children)
+            await preloadDepthLevel(pageStart, pageEnd, 2);
+
+            // Load depth 3: great-grandchildren
+            await preloadDepthLevel(pageStart, pageEnd, 3);
+        }
+
+        async function preloadDepthLevel(pageStart, pageEnd, targetDepth) {
+            const nodesToExpand = [];
+
+            // Collect all nodes at targetDepth-1 that need children loaded
+            for (let i = pageStart; i < pageEnd && i < treeData.children.length; i++) {
+                const rootToken = treeData.children[i];
+                if (!rootToken) continue;
+                collectNodesNeedingChildren(rootToken, [rootToken.token_id], 1, targetDepth, nodesToExpand);
+            }
+
+            if (nodesToExpand.length === 0) return;
+
+            try {
+                const response = await fetch('/api/expand-depth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: treeData.prompt,
+                        nodes: nodesToExpand,
+                        k: initialK
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) return;
+
+                // Merge children into tree (without re-rendering)
+                const childrenMap = data.children_map;
+                for (const nodeInfo of nodesToExpand) {
+                    const pathKey = [...nodeInfo.path, nodeInfo.token_id].join(',');
+                    if (childrenMap[pathKey]) {
+                        // Find the node in the tree and set its children
+                        const node = findNodeByPath([...nodeInfo.path, nodeInfo.token_id]);
+                        if (node && !node.children) {
+                            const children = childrenMap[pathKey];
+                            for (const child of children) {
+                                child.cumulative_prob = (node.cumulative_prob || node.probability) * child.probability;
+                            }
+                            node.children = children;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error preloading depth level:', error);
+            }
+        }
+
+        function collectNodesNeedingChildren(node, pathSoFar, currentDepth, targetDepth, result) {
+            if (!node) return;
+
+            if (currentDepth === targetDepth - 1) {
+                // We're at the parent level - collect children that need their own children loaded
+                if (node.children) {
+                    for (const child of node.children) {
+                        if (child && !child.children) {
+                            result.push({
+                                path: pathSoFar,
+                                token_id: child.token_id
+                            });
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Go deeper
+            if (node.children) {
+                for (const child of node.children) {
+                    if (child) {
+                        collectNodesNeedingChildren(child, [...pathSoFar, child.token_id], currentDepth + 1, targetDepth, result);
+                    }
+                }
+            }
+        }
+
+        function findNodeByPath(tokenIds) {
+            if (tokenIds.length === 0) return null;
+
+            // First token ID is a root token
+            let node = treeData.children.find(c => c && c.token_id === tokenIds[0]);
+
+            for (let i = 1; i < tokenIds.length && node; i++) {
+                if (!node.children) return null;
+                node = node.children.find(c => c && c.token_id === tokenIds[i]);
+            }
+
+            return node;
+        }
+
+        async function loadPageDepths(pageNum) {
+            // Skip if already loaded or currently loading
+            if (loadedPageDepths.has(pageNum) || loadingPageDepths.has(pageNum)) return;
+            loadingPageDepths.add(pageNum);
+
+            // Load deeper layers for a specific page's tokens using expand-depth
+            const pageStart = pageNum * initialK;
+            const pageEnd = Math.min(pageStart + initialK, totalK);
+
+            console.log(`Loading depths for page ${pageNum} (tokens ${pageStart}-${pageEnd})...`);
+
+            try {
+                // Collect the tokens on this page that need children loaded
+                const nodesToExpand = [];
+                for (let i = pageStart; i < pageEnd && i < treeData.children.length; i++) {
+                    const node = treeData.children[i];
+                    if (node && !node.children) {
+                        nodesToExpand.push({
+                            path: [], // Root level - empty path
+                            token_id: node.token_id
+                        });
+                    }
+                }
+
+                if (nodesToExpand.length === 0) {
+                    console.log(`Page ${pageNum} tokens already have children`);
+                    loadingPageDepths.delete(pageNum);
+                    loadedPageDepths.add(pageNum);
+                    if (!isAnimating) renderLevels();
+                    return;
+                }
+
+                const response = await fetch('/api/expand-depth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: treeData.prompt,
+                        nodes: nodesToExpand,
+                        k: initialK
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    // Merge children into the tree
+                    const childrenMap = data.children_map;
+
+                    for (let i = pageStart; i < pageEnd && i < treeData.children.length; i++) {
+                        const node = treeData.children[i];
+                        // Only set children if node doesn't already have them
+                        if (node.children) continue;
+
+                        const pathKey = node.token_id.toString();
+                        if (childrenMap[pathKey]) {
+                            // Fix cumulative probability for loaded children
+                            const children = childrenMap[pathKey];
+                            for (const child of children) {
+                                child.cumulative_prob = node.cumulative_prob * child.probability;
+                            }
+                            node.children = children;
+                        }
+                    }
+
+                    console.log(`✓ Loaded depths for page ${pageNum}`);
+                    loadingPageDepths.delete(pageNum);
+                    loadedPageDepths.add(pageNum);
+                    if (!isAnimating) renderLevels();
+                }
+            } catch (error) {
+                console.error(`Error loading depths for page ${pageNum}:`, error);
+                loadingPageDepths.delete(pageNum); // Allow retry
+            }
+        }
+
+        async function loadNextPage(pageNum) {
+            // Skip if already loaded
+            if (loadedPages.has(pageNum)) return;
+
+            // Load the next page's first layer tokens
+            const newTotalK = (pageNum + 1) * initialK;
+
+            if (newTotalK <= totalK) {
+                // Already have enough tokens
+                loadedPages.add(pageNum);
+                return;
+            }
+
+            loadedPages.add(pageNum);
+            console.log(`Loading page ${pageNum} tokens...`);
+
+            try {
+                const response = await fetch('/api/beam-tree', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: originalPrompt,
+                        k: newTotalK,
+                        n: 1  // First layer only
+                    })
+                });
+
+                const newData = await response.json();
+                if (response.ok) {
+                    // Add new tokens
+                    for (let i = totalK; i < newData.children.length; i++) {
+                        treeData.children[i] = newData.children[i];
+                    }
+
+                    totalK = newTotalK;
+                    if (!isAnimating) renderLevels();
+
+                    console.log(`✓ Loaded page ${pageNum} first layer`);
+                }
+            } catch (error) {
+                console.error(`Error loading page ${pageNum}:`, error);
+                loadedPages.delete(pageNum); // Allow retry
+            }
         }
 
         function getCurrentNodes() {
@@ -1009,8 +1660,202 @@
             return nodes || [];
         }
 
-        function renderLevels() {
+        function navigateLeft() {
+            const nodes = getCurrentNodes();
+            if (nodes.length === 0 || totalK === 0) return;
+
+            // Don't cycle - stop at beginning
+            if (currentIndex <= 0) return;
+
+            const oldPage = currentPage;
+            currentIndex = currentIndex - 1;
+            currentPage = Math.floor(currentIndex / initialK);
+
+            if (currentPage !== oldPage) {
+                animatePageTransition(oldPage, currentPage);
+            } else {
+                renderLevels();
+            }
+            updatePathDisplay();
+        }
+
+        function navigateRight() {
+            const nodes = getCurrentNodes();
+            if (nodes.length === 0) return;
+
+            const oldPage = currentPage;
+            const newIndex = currentIndex + 1;
+            const newPage = Math.floor(newIndex / initialK);
+
+            // If trying to go to unloaded tokens, trigger load and wait
+            if (newIndex >= totalK) {
+                loadNextPage(newPage);
+                return; // Can't advance until loaded
+            }
+
+            currentIndex = newIndex;
+            currentPage = newPage;
+
+            // Preload next page when approaching end of current page
+            if (currentIndex % initialK >= initialK - 2) {
+                loadNextPage(currentPage + 1);
+            }
+
+            if (currentPage !== oldPage) {
+                animatePageTransition(oldPage, currentPage);
+            } else {
+                renderLevels();
+            }
+            updatePathDisplay();
+        }
+
+        function animatePageTransition(fromPage, toPage) {
+            // Cancel any previous animation timeout
+            if (animationTimeoutId) {
+                clearTimeout(animationTimeoutId);
+                animationTimeoutId = null;
+            }
+
+            isAnimating = true; // Prevent background re-renders during animation
+            renderLevels(fromPage);
+
+            // Delay loading operations until after the animation completes (400ms)
+            // This prevents API calls and re-renders from causing choppy animations
+            animationTimeoutId = setTimeout(async () => {
+                animationTimeoutId = null;
+                isAnimating = false; // Animation complete, allow re-renders
+
+                // Ensure current page has full depth loaded
+                await loadPageDepths(toPage);
+                renderLevels(); // Re-render now that data is loaded
+
+                // Load the NEXT page's first layer tokens
+                const nextPageToLoad = toPage + 1;
+                await loadNextPage(nextPageToLoad);
+
+                // Preload full depth for next page in background (for smooth future navigation)
+                preloadPageFullDepth(nextPageToLoad);
+            }, 420); // Slightly longer than the 400ms animation
+        }
+
+        function createTokenCard(node, idx, depth, selectedIdx) {
+            const card = document.createElement('div');
+            card.className = 'token-card';
+
+            if (depth === 0) {
+                if (idx === currentIndex) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.add('dimmed');
+                }
+            } else {
+                // Background layers - all get dimmed class
+                card.classList.add('dimmed');
+            }
+
+            const tokenText = document.createElement('div');
+            tokenText.className = 'token-text';
+            tokenText.textContent = node.token_str.replace(/\n/g, '↵').replace(/\t/g, '→');
+
+            const probText = document.createElement('div');
+            probText.className = 'token-prob';
+            probText.textContent = `${(node.probability * 100).toFixed(1)}%`;
+
+            const cumulativeText = document.createElement('div');
+            cumulativeText.className = 'cumulative-prob';
+            cumulativeText.textContent = `Σ ${(node.cumulative_prob * 100).toFixed(3)}%`;
+
+            card.appendChild(tokenText);
+            card.appendChild(probText);
+            card.appendChild(cumulativeText);
+
+            if (depth === 0) {
+                card.addEventListener('click', () => {
+                    currentIndex = idx;
+                    renderLevels();
+                    updatePathDisplay();
+                });
+            }
+
+            return card;
+        }
+
+        function updateDepthZeroSelection(container) {
+            // Update active/dimmed classes on depth-0 cards without rebuilding
+            const level0 = container.querySelector('.level-0');
+            if (!level0) return;
+
+            const cards = level0.querySelectorAll('.token-card');
+            cards.forEach((card, idx) => {
+                if (idx === currentIndex) {
+                    card.classList.remove('dimmed');
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                    card.classList.add('dimmed');
+                }
+            });
+        }
+
+        function rebuildDeeperLayers(container) {
+            // Remove existing deeper level containers (preserve level-0)
+            container.querySelectorAll('.level-1, .level-2, .level-3').forEach(el => el.remove());
+
+            // Navigate to current position in tree
+            let nodes = treeData.children;
+            for (const selection of currentPath) {
+                if (!nodes || !nodes[selection.index]) return;
+                nodes = nodes[selection.index].children;
+            }
+            if (!nodes || nodes.length === 0) return;
+
+            // Get the selected node at depth 0 and traverse to its children
+            const selectedNode = nodes[currentIndex];
+            if (!selectedNode || !selectedNode.children) return;
+
+            let childNodes = selectedNode.children;
+
+            // Render depth 1, 2, 3
+            for (let depth = 1; depth < 4; depth++) {
+                if (!childNodes || childNodes.length === 0) break;
+
+                const levelDiv = document.createElement('div');
+                levelDiv.className = `level-container level-${depth}`;
+
+                const carousel = document.createElement('div');
+                carousel.className = 'carousel';
+                carousel.style.justifyContent = 'center';
+
+                const track = document.createElement('div');
+                track.className = 'carousel-track';
+
+                const visibleNodes = childNodes.slice(0, initialK);
+                visibleNodes.forEach((node, idx) => {
+                    const card = createTokenCard(node, idx, depth, 0);
+                    track.appendChild(card);
+                });
+
+                carousel.appendChild(track);
+                levelDiv.appendChild(carousel);
+                container.appendChild(levelDiv);
+
+                // Move to next depth level (always follow index 0 for deeper layers)
+                if (!childNodes[0] || !childNodes[0].children) break;
+                childNodes = childNodes[0].children;
+            }
+        }
+
+        function renderLevels(animateFromPage = null) {
             const container = document.getElementById('levels-container');
+
+            // During animation, don't rebuild depth-0 - just update classes and rebuild deeper layers
+            if (isAnimating && animateFromPage === null) {
+                updateDepthZeroSelection(container);
+                rebuildDeeperLayers(container);
+                updateDepth();
+                return;
+            }
+
             container.innerHTML = '';
 
             // First, navigate to the current position in the tree based on currentPath
@@ -1027,7 +1872,7 @@
             let lastRenderedNodes = null;
             let lastDepthPath = null;
 
-            for (let depth = 0; depth < 5; depth++) {
+            for (let depth = 0; depth < 4; depth++) {
                 if (!nodes || nodes.length === 0) break;
 
                 const levelDiv = document.createElement('div');
@@ -1035,60 +1880,108 @@
 
                 const carousel = document.createElement('div');
                 carousel.className = 'carousel';
+                if (depth > 0) carousel.style.justifyContent = 'center';
 
                 const selectedIdx = depth === 0 ? currentIndex : 0;
 
-                nodes.forEach((node, idx) => {
-                    const card = document.createElement('div');
-                    card.className = 'token-card';
+                // Create track
+                const track = document.createElement('div');
+                track.className = 'carousel-track';
+                if (depth === 0) track.id = 'carousel-track-0';
 
-                    if (depth === 0) {
-                        if (idx === currentIndex) {
-                            card.classList.add('active');
-                        } else {
-                            card.classList.add('dimmed');
+                if (depth === 0) {
+                    // Depth 0: show all pages with separators
+                    const visibleNodes = nodes.slice(0, totalK);
+
+                    visibleNodes.forEach((node, idx) => {
+                        // Add separator before each page boundary (except first)
+                        if (idx > 0 && idx % initialK === 0) {
+                            const separator = document.createElement('div');
+                            separator.className = 'page-separator';
+
+                            // Calculate cumulative probability up to this boundary
+                            let cumulativeP = 0;
+                            for (let i = 0; i < idx; i++) {
+                                cumulativeP += visibleNodes[i].probability;
+                            }
+
+                            const topLabel = document.createElement('div');
+                            topLabel.className = 'page-separator-label';
+                            topLabel.textContent = `k=${idx}`;
+                            separator.appendChild(topLabel);
+
+                            const line = document.createElement('div');
+                            line.className = 'page-separator-line';
+                            separator.appendChild(line);
+
+                            const bottomLabel = document.createElement('div');
+                            bottomLabel.className = 'page-separator-label';
+                            bottomLabel.textContent = `p=${cumulativeP.toFixed(3)}`;
+                            separator.appendChild(bottomLabel);
+
+                            track.appendChild(separator);
                         }
-                    } else {
-                        // Background layers - all get dimmed class
-                        card.classList.add('dimmed');
-                    }
 
-                    const tokenText = document.createElement('div');
-                    tokenText.className = 'token-text';
-                    tokenText.textContent = node.token_str.replace(/\n/g, '↵').replace(/\t/g, '→');
+                        const card = createTokenCard(node, idx, depth, selectedIdx);
+                        if (idx >= initialK) {
+                            card.classList.add('out-of-policy');
+                        }
+                        track.appendChild(card);
+                    });
+                } else {
+                    // Deeper levels: just show first k tokens, centered
+                    const visibleNodes = nodes.slice(0, initialK);
 
-                    const probText = document.createElement('div');
-                    probText.className = 'token-prob';
-                    probText.textContent = `${(node.probability * 100).toFixed(1)}%`;
+                    visibleNodes.forEach((node, idx) => {
+                        const card = createTokenCard(node, idx, depth, selectedIdx);
+                        track.appendChild(card);
+                    });
+                }
 
-                    const cumulativeText = document.createElement('div');
-                    cumulativeText.className = 'cumulative-prob';
-                    cumulativeText.textContent = `Σ ${(node.cumulative_prob * 100).toFixed(3)}%`;
-
-                    card.appendChild(tokenText);
-                    card.appendChild(probText);
-                    card.appendChild(cumulativeText);
-
-                    if (depth === 0) {
-                        card.addEventListener('click', () => {
-                            currentIndex = idx;
-                            renderLevels();
-                            updatePathDisplay();
-                        });
-                    }
-
-                    carousel.appendChild(card);
-                });
-
+                carousel.appendChild(track);
                 levelDiv.appendChild(carousel);
                 container.appendChild(levelDiv);
+
+                // Position the track - depth 0 gets page-based positioning,
+                // deeper layers follow the same animation pattern
+                if (depth === 0) {
+                    requestAnimationFrame(() => {
+                        positionTrackForPage(track, currentPage, animateFromPage);
+                    });
+                } else if (animateFromPage !== null && animateFromPage !== currentPage) {
+                    // During page animation, deeper layers should slide in from the same direction
+                    // as the top layer to create a unified movement effect
+                    const direction = currentPage > animateFromPage ? 1 : -1; // Same direction as top layer movement
+                    const carousel = track.parentElement;
+                    const viewportWidth = carousel ? carousel.offsetWidth : 800;
+                    const offsetAmount = viewportWidth * 0.3; // Start 30% viewport off to the side
+
+                    track.style.transform = `translateX(${direction * offsetAmount}px)`;
+                    track.style.opacity = '0.3';
+
+                    // Use double-RAF to avoid forced reflow jank
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            track.classList.add('animating');
+                            track.style.transform = 'translateX(0)';
+                            track.style.opacity = '1';
+                            setTimeout(() => track.classList.remove('animating'), 400);
+                        });
+                    });
+                }
 
                 lastRenderedNodes = nodes;
                 lastDepthPath = depthPath;
 
                 // Move to children of selected node for next level
                 if (!nodes[selectedIdx] || !nodes[selectedIdx].children) {
-                    // We've reached the edge - check if we need to load
+                    // Don't try to load deeper children until the current page's depths are fully loaded
+                    // This prevents race conditions between loadPageDepths and loadNextLayer
+                    if (!loadedPageDepths.has(currentPage) || loadingPageDepths.has(currentPage)) {
+                        // Page depths still loading - wait for completion and re-render
+                        break;
+                    }
+
                     const pathKey = depthPath.map(p => p.token_id).join(',');
                     if (!loadedDepths.has(pathKey) && lastRenderedNodes) {
                         loadedDepths.add(pathKey);
@@ -1097,7 +1990,6 @@
                     break;
                 }
 
-                // Update path for next iteration
                 if (depth === 0) {
                     depthPath = [...currentPath, { token_id: nodes[selectedIdx].token_id, index: selectedIdx }];
                 } else {
@@ -1108,6 +2000,69 @@
             }
 
             updateDepth();
+        }
+
+        function positionTrackForPage(track, targetPage, animateFromPage) {
+            const cards = track.querySelectorAll('.token-card');
+            const separators = track.querySelectorAll('.page-separator');
+            const carousel = track.parentElement;
+
+            if (cards.length === 0 || !carousel) return;
+
+            const viewportWidth = carousel.offsetWidth;
+            const viewportCenter = viewportWidth / 2;
+            const gap = 30; // gap between cards
+
+            // Calculate the center X position of a page within the track
+            const calculatePageCenterX = (page) => {
+                let x = 0;
+                const pageStartIdx = page * initialK;
+                const pageEndIdx = Math.min(pageStartIdx + initialK, cards.length);
+
+                // Add width of all cards before this page
+                for (let i = 0; i < pageStartIdx && i < cards.length; i++) {
+                    x += cards[i].offsetWidth + gap;
+                }
+
+                // Add separator widths before this page
+                for (let i = 0; i < page && i < separators.length; i++) {
+                    x += separators[i].offsetWidth + gap;
+                }
+
+                // Now x is at the left edge of this page
+                // Calculate the width of this page
+                let pageWidth = 0;
+                for (let i = pageStartIdx; i < pageEndIdx && i < cards.length; i++) {
+                    pageWidth += cards[i].offsetWidth;
+                    if (i < pageEndIdx - 1) pageWidth += gap;
+                }
+
+                // Return the center of this page
+                return x + pageWidth / 2;
+            };
+
+            const targetCenterX = calculatePageCenterX(targetPage);
+            const targetOffset = viewportCenter - targetCenterX;
+
+            if (animateFromPage !== null && animateFromPage !== targetPage) {
+                // Animate from old position to new
+                const fromCenterX = calculatePageCenterX(animateFromPage);
+                const fromOffset = viewportCenter - fromCenterX;
+
+                track.style.transform = `translateX(${fromOffset}px)`;
+
+                // Use double-RAF to avoid forced reflow jank
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        track.classList.add('animating');
+                        track.style.transform = `translateX(${targetOffset}px)`;
+                        setTimeout(() => track.classList.remove('animating'), 400);
+                    });
+                });
+            } else {
+                // Just set position
+                track.style.transform = `translateX(${targetOffset}px)`;
+            }
         }
 
         function updatePathDisplay() {
@@ -1158,6 +2113,7 @@
             });
 
             currentIndex = 0;
+            currentPage = 0; // Reset to first page when going deeper
             renderLevels();
             updatePathDisplay();
         }
@@ -1167,11 +2123,15 @@
 
             const last = currentPath.pop();
             currentIndex = last.index;
+            currentPage = Math.floor(currentIndex / initialK);
             renderLevels();
             updatePathDisplay();
         }
 
         async function loadNextLayer(nodes, pathToNodes) {
+            if (isLoadingNextLayer) return; // Prevent cascading
+            isLoadingNextLayer = true;
+
             try {
                 // Collect all nodes that need children loaded
                 const nodesToExpand = nodes.map(node => ({
@@ -1185,9 +2145,9 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        prompt: treeData.prompt,
+                        prompt: treeData.prompt,  // expand-depth needs full prompt with special tokens
                         nodes: nodesToExpand,
-                        k: initialK
+                        k: initialK  // Load k children for each node
                     })
                 });
 
@@ -1195,23 +2155,34 @@
 
                 if (!response.ok) {
                     console.error('Failed to load depth:', data.error);
+                    isLoadingNextLayer = false;
                     return;
                 }
 
-                // Merge children into the tree silently
+                // Merge children into the tree
                 const childrenMap = data.children_map;
 
                 for (const node of nodes) {
+                    // Only set children if node doesn't already have them
+                    if (node.children) continue;
+
                     const pathKey = [...pathToNodes.map(p => p.token_id), node.token_id].join(',');
                     if (childrenMap[pathKey]) {
-                        node.children = childrenMap[pathKey];
+                        // Fix cumulative probability for loaded children
+                        const children = childrenMap[pathKey];
+                        for (const child of children) {
+                            child.cumulative_prob = node.cumulative_prob * child.probability;
+                        }
+                        node.children = children;
                     }
                 }
 
-                // Don't re-render - let the next navigation show the loaded content
-                // This prevents the jarring re-render when navigating
+                isLoadingNextLayer = false;
+                // Re-render to show newly loaded layers (unless animating)
+                if (!isAnimating) renderLevels();
             } catch (error) {
                 console.error('Error loading depth:', error);
+                isLoadingNextLayer = false;
             }
         }
 
@@ -1425,7 +2396,7 @@
             }
         }
 
-        // Enter key handler for prompt inputs
+        // Enter to start in prompt inputs
         document.getElementById('prompt').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1440,20 +2411,18 @@
             }
         });
 
-        // Send button handler
-        const sendBtn = document.getElementById('send-button-drive');
-        if (sendBtn) {
-            sendBtn.addEventListener('click', (e) => {
+        document.getElementById('param-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
                 e.preventDefault();
-                startDrive();
-            });
-        }
+            }
+        });
 
         // Keyboard controls
         document.addEventListener('keydown', (e) => {
-            // Don't interfere with typing in the prompt inputs
+            // Don't interfere with typing in the prompt inputs or param input
             if (document.activeElement === document.getElementById('prompt') ||
-                document.activeElement === document.getElementById('prompt-imessage')) {
+                document.activeElement === document.getElementById('prompt-imessage') ||
+                document.activeElement === document.getElementById('param-input')) {
                 return;
             }
 
@@ -1461,19 +2430,11 @@
                 switch(e.key) {
                     case 'ArrowLeft':
                         e.preventDefault();
-                        const nodes = getCurrentNodes();
-                        if (nodes.length === 0) break;
-                        currentIndex = (currentIndex - 1 + nodes.length) % nodes.length;
-                        renderLevels();
-                        updatePathDisplay();
+                        navigateLeft();
                         break;
                     case 'ArrowRight':
                         e.preventDefault();
-                        const nodesRight = getCurrentNodes();
-                        if (nodesRight.length === 0) break;
-                        currentIndex = (currentIndex + 1) % nodesRight.length;
-                        renderLevels();
-                        updatePathDisplay();
+                        navigateRight();
                         break;
                     case ' ':
                         e.preventDefault();
@@ -1496,15 +2457,6 @@
                         exportSelections();
                         break;
                 }
-            } else if (e.key === 'Enter') {
-                startDrive();
-            }
-        });
-
-        // Allow Enter to start
-        document.getElementById('prompt').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                startDrive();
             }
         });
     </script>
