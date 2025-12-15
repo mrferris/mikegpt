@@ -15,7 +15,7 @@ class Model:
     def __init__(self, checkpoint_path):
         self.device = "mps"
         self.context_length = 256
-        d_model = 512
+        d_model = 256
         vocab_size = 8192
         num_heads = 4
         num_layers = 4
@@ -41,9 +41,38 @@ class Model:
 
         self.trainable_model = TrainableModel(model=self.model)
 
+        # Load vocab to extract emojis
+        import json
+
+        with open("vocab/mikegpt_vocab_8192.json") as f:
+            vocab_json = json.load(f)
+
+        # Extract emojis from vocab (tokens 10-282)
+        emojis = []
+        for token_id in range(10, 283):
+            if str(token_id) in vocab_json:
+                hex_bytes = vocab_json[str(token_id)]
+                emoji = bytes.fromhex(hex_bytes).decode("utf-8", errors="replace")
+                emojis.append(emoji)
+
+        # Define special tokens (core + reactions + emojis)
+        special_tokens = [
+            "<|endoftext|>",
+            "<|Me|>",
+            "<|Them|>",
+            "<|ConversationStart|>",
+            "<|Loved|>",
+            "<|Liked|>",
+            "<|Laughed at|>",
+            "<|Disliked|>",
+            "<|Questioned|>",
+            "<|Emphasized|>",
+        ] + emojis
+
         self.tokenizer = Tokenizer.from_files(
-            "vocab/mikegpt_vocab.json",
-            "vocab/mikegpt_merges.pkl",
+            "vocab/mikegpt_vocab_8192.json",
+            "vocab/mikegpt_merges_8192.pkl",
+            special_tokens=special_tokens,
         )
 
         self.current_tokens = None  # running token buffer on device
@@ -164,7 +193,7 @@ class Model:
             Tree structure with nodes containing token info and children
         """
         # Tokenize the initial prompt
-        prompt = "<|Them|>" + prompt + "<|Me|>"
+        prompt = "<|ConversationStart|><|Them|>" + prompt + "<|Me|>"
         tokens = self.tokenizer.encode(prompt)
         if len(tokens) > self.context_length:
             tokens = tokens[-self.context_length :]
@@ -233,18 +262,22 @@ class Model:
         generated_any = False
 
         for _ in range(max_tokens):
-            token = self.next_token(use_top_k=True, top_k=5)
-            print(token)
+            token = self.next_token(use_top_k=True, top_k=3)
 
             # 2. Handle special tokens
-            if token in ["<|Me|>", "<|Them|>", "<|endoftext|>"]:
+            if token in [
+                "<|Me|>",
+                "<|Them|>",
+                "<|endoftext|>",
+                "<|ConversationStart|>",
+            ]:
                 if current_response.strip():
                     yield current_response.strip()
                     generated_any = True
                     current_response = ""
 
                 # stop generating once next speaker starts
-                if token in ["<|Them|>", "<|endoftext|>"]:
+                if token in ["<|Them|>", "<|endoftext|>", "<|ConversationStart|>"]:
                     break
 
             elif token in [
@@ -258,7 +291,6 @@ class Model:
                 # single reaction token as message
                 yield token
                 generated_any = True
-                break
 
             else:
                 current_response += token
