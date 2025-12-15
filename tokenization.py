@@ -22,7 +22,7 @@ def extract_emojis_from_file(input_path: str) -> list[str]:
     Extract all unique emojis from a text file.
 
     Returns a sorted list of unique emoji strings, including both full sequences
-    and their base components (matching the format in emojis.py).
+    and their base components
     """
     # Read the file
     with open(input_path, "r", encoding="utf-8") as f:

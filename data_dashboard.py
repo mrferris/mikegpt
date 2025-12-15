@@ -4,19 +4,16 @@ import os
 import re
 import string
 import argparse
-from flask import Flask, render_template, jsonify, request, send_file
-from datetime import datetime
-import json
+from flask import Flask, render_template, jsonify, request
 
 app = Flask(__name__)
 
 # Global variable to store database paths
 DB_PATHS = []
 
-# Self address to filter out conversations with yourself
-SELF_ADDRESS = "+17163594066"
+# Self address to filter out conversations with one's self
+SELF_ADDRESS = "PUT_YOUR_PHONE_NUMBER_HERE"
 
-# Patterns from get_convos.py
 REACTION_PATTERNS = re.compile(
     r"^(Loved|Liked|Laughed at|Disliked|Emphasized) ", re.DOTALL
 )
@@ -26,6 +23,7 @@ ME_PATTERN = "<|Me|>"
 THEM_PATTERN = "<|Them|>"
 
 PRINTABLE = set(string.printable)
+
 
 def extract_text(row_text, row_attributed, rowid=None):
     """Get clean message text from iMessage DB row."""
@@ -45,14 +43,18 @@ def extract_text(row_text, row_attributed, rowid=None):
 
         # Try the newer unarchiver API first
         try:
-            attributed_string = NSKeyedUnarchiver.unarchivedObjectOfClass_fromData_error_(
-                None, ns_data, None
-            )[0]
+            attributed_string = (
+                NSKeyedUnarchiver.unarchivedObjectOfClass_fromData_error_(
+                    None, ns_data, None
+                )[0]
+            )
         except:
             # Fall back to older API
             unarchiver = NSKeyedUnarchiver.alloc().initForReadingWithData_(ns_data)
             if unarchiver is None:
-                raise Exception("NSKeyedUnarchiver.alloc().initForReadingWithData_() returned None")
+                raise Exception(
+                    "NSKeyedUnarchiver.alloc().initForReadingWithData_() returned None"
+                )
             unarchiver.setRequiresSecureCoding_(False)
             attributed_string = unarchiver.decodeObjectForKey_("root")
             unarchiver.finishDecoding()
@@ -68,11 +70,11 @@ def extract_text(row_text, row_attributed, rowid=None):
         else:
             raise Exception("attributedBody.string() was empty")
 
-    except Exception as e:
+    except Exception:
         # Method 2: Fallback to binary parsing with proper understanding of NSKeyedArchiver format
         try:
             text_bytes = row_attributed
-            decoded = text_bytes.decode('utf-8', errors='ignore')
+            decoded = text_bytes.decode("utf-8", errors="ignore")
 
             import re
 
@@ -85,7 +87,7 @@ def extract_text(row_text, row_attributed, rowid=None):
             # Strategy: Find NSString markers, skip past any +<char> prefix, extract text
 
             # Find all potential text chunks after NSString markers
-            parts = decoded.split('NSString')
+            parts = decoded.split("NSString")
 
             candidates = []
             for part in parts[1:]:  # Skip first part (before any NSString)
@@ -94,17 +96,21 @@ def extract_text(row_text, row_attributed, rowid=None):
                     continue
 
                 # Remove binary junk from the beginning (control chars)
-                cleaned = re.sub(r'^[\x00-\x1f\x7f-\x9f]+', '', part)
+                cleaned = re.sub(r"^[\x00-\x1f\x7f-\x9f]+", "", part)
 
                 # Remove the length prefix pattern: +<single char><optional replacement char>
                 # This handles: +: +g +# etc.
-                cleaned = re.sub(r'^\+[\x00-\x7f][\ufffd\uFFFD]*', '', cleaned)
+                cleaned = re.sub(r"^\+[\x00-\x7f][\ufffd\uFFFD]*", "", cleaned)
 
                 # Also remove any other common binary prefix patterns
-                cleaned = re.sub(r'^[\x80-\xff]+', '', cleaned)
+                cleaned = re.sub(r"^[\x80-\xff]+", "", cleaned)
 
                 # Now extract the actual message text (stop at next control char or metadata marker)
-                match = re.match(r'^([^\x00-\x08\x0b-\x0c\x0e-\x1f]+?)(?:[\x00-\x1f]|__kIM|NSDictionary|NSNumber|NSMutable|bplist|\$)', cleaned, re.UNICODE)
+                match = re.match(
+                    r"^([^\x00-\x08\x0b-\x0c\x0e-\x1f]+?)(?:[\x00-\x1f]|__kIM|NSDictionary|NSNumber|NSMutable|bplist|\$)",
+                    cleaned,
+                    re.UNICODE,
+                )
 
                 if match:
                     text = match.group(1).strip()
@@ -114,11 +120,14 @@ def extract_text(row_text, row_attributed, rowid=None):
                         continue
 
                     # Must have letters/numbers/emojis
-                    if not re.search(r'[\w😀-🙏🌀-🗿]', text, re.UNICODE):
+                    if not re.search(r"[\w😀-🙏🌀-🗿]", text, re.UNICODE):
                         continue
 
                     # Reject if it's mostly metadata
-                    if any(marker in text for marker in ['NSString', 'NSData', 'streamtyped', '__kIM']):
+                    if any(
+                        marker in text
+                        for marker in ["NSString", "NSData", "streamtyped", "__kIM"]
+                    ):
                         continue
 
                     candidates.append(text)
@@ -129,12 +138,15 @@ def extract_text(row_text, row_attributed, rowid=None):
                 candidates.sort(key=lambda x: len(x), reverse=True)
                 return candidates[0]
 
-        except Exception as e2:
+        except Exception:
             pass
 
         # If fallback parsing failed or returned nothing, skip this message
-        print(f"WARNING: Could not extract attributedBody for rowid={rowid}, skipping message")
+        print(
+            f"WARNING: Could not extract attributedBody for rowid={rowid}, skipping message"
+        )
         return None
+
 
 def get_formatted_conversation(contact_id):
     """
@@ -143,8 +155,12 @@ def get_formatted_conversation(contact_id):
     including auto-added <|ConversationStart|> tokens.
     """
     conversation_messages = []
-    seen_messages = set()  # Track (db_path, rowid, date, text) tuples to prevent duplicates
-    debug_contact = contact_id == "+17132618883"  # Enable debug logging for this contact
+    seen_messages = (
+        set()
+    )  # Track (db_path, rowid, date, text) tuples to prevent duplicates
+    debug_contact = (
+        contact_id == "+17132618883"
+    )  # Enable debug logging for this contact
 
     if debug_contact:
         print(f"\n=== DEBUG: Fetching conversation for {contact_id} ===")
@@ -201,7 +217,9 @@ def get_formatted_conversation(contact_id):
                     continue
 
                 if debug_contact:
-                    print(f"  Found matching chat_id: {chat_id} with {len(messages)} messages")
+                    print(
+                        f"  Found matching chat_id: {chat_id} with {len(messages)} messages"
+                    )
 
                 # Skip convos with yourself
                 if any(m[2] == SELF_ADDRESS for m in messages if m[2]):
@@ -241,20 +259,22 @@ def get_formatted_conversation(contact_id):
                     message_key = (date, is_from_me, text)
                     if message_key in seen_messages:
                         if debug_contact and "instrumentals" in text.lower():
-                            print(f"  SKIPPING DUPLICATE: db={os.path.basename(db_path)}, rowid={rowid}, date={date}, text={text[:50]}")
+                            print(
+                                f"  SKIPPING DUPLICATE: db={os.path.basename(db_path)}, rowid={rowid}, date={date}, text={text[:50]}"
+                            )
                         continue
                     seen_messages.add(message_key)
 
                     role = ME_PATTERN if is_from_me else THEM_PATTERN
 
                     if debug_contact and "instrumentals" in text.lower():
-                        print(f"  ADDING: rowid={rowid}, date={date}, from_me={is_from_me}, text={text[:50]}")
+                        print(
+                            f"  ADDING: rowid={rowid}, date={date}, from_me={is_from_me}, text={text[:50]}"
+                        )
 
-                    conversation_messages.append({
-                        'role': role,
-                        'text': text,
-                        'date': date
-                    })
+                    conversation_messages.append(
+                        {"role": role, "text": text, "date": date}
+                    )
 
             conn.close()
 
@@ -263,26 +283,26 @@ def get_formatted_conversation(contact_id):
             continue
 
     # Sort all messages by date to ensure correct chronological order
-    conversation_messages.sort(key=lambda m: m['date'])
+    conversation_messages.sort(key=lambda m: m["date"])
 
     if debug_contact:
         print(f"\n=== BEFORE MERGING: {len(conversation_messages)} messages ===")
         for i, msg in enumerate(conversation_messages):
-            if "instrumentals" in msg['text'].lower():
+            if "instrumentals" in msg["text"].lower():
                 print(f"  [{i}] {msg['role']}{msg['text'][:50]} (date: {msg['date']})")
 
     # Merge successive "Them:" messages only if within 1 hour
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     merged = []
     for msg in conversation_messages:
         should_merge = False
 
-        if merged and merged[-1]['role'] == msg['role'] and msg['role'] == THEM_PATTERN:
+        if merged and merged[-1]["role"] == msg["role"] and msg["role"] == THEM_PATTERN:
             # Check if messages are within 1 hour of each other
             try:
-                prev_time = datetime.fromisoformat(merged[-1]['date'].replace(' ', 'T'))
-                curr_time = datetime.fromisoformat(msg['date'].replace(' ', 'T'))
+                prev_time = datetime.fromisoformat(merged[-1]["date"].replace(" ", "T"))
+                curr_time = datetime.fromisoformat(msg["date"].replace(" ", "T"))
                 time_diff = (curr_time - prev_time).total_seconds()
 
                 # Merge if within 1 hour (3600 seconds)
@@ -293,21 +313,21 @@ def get_formatted_conversation(contact_id):
                 pass
 
         if should_merge:
-            merged[-1]['text'] += " " + msg['text']
+            merged[-1]["text"] += " " + msg["text"]
             # Update date to the later message
-            merged[-1]['date'] = msg['date']
+            merged[-1]["date"] = msg["date"]
         else:
             merged.append(msg)
 
     if debug_contact:
         print(f"\n=== AFTER MERGING: {len(merged)} messages ===")
         for i, msg in enumerate(merged):
-            if "instrumentals" in msg['text'].lower():
+            if "instrumentals" in msg["text"].lower():
                 print(f"  [{i}] {msg['role']}{msg['text'][:50]} (date: {msg['date']})")
 
     # Remove 'rowid' field before returning (only keep role, text, date)
     for msg in merged:
-        msg.pop('rowid', None)
+        msg.pop("rowid", None)
 
     # Add auto-generated <|ConversationStart|> indices
     # This detects where ConversationStart tokens WOULD be auto-added during generation
@@ -317,8 +337,10 @@ def get_formatted_conversation(contact_id):
     # Detect 72+ hour breaks
     for idx in range(1, len(merged)):
         try:
-            prev_date = datetime.fromisoformat(merged[idx-1]['date'].replace(' ', 'T'))
-            curr_date = datetime.fromisoformat(merged[idx]['date'].replace(' ', 'T'))
+            prev_date = datetime.fromisoformat(
+                merged[idx - 1]["date"].replace(" ", "T")
+            )
+            curr_date = datetime.fromisoformat(merged[idx]["date"].replace(" ", "T"))
             time_diff = (curr_date - prev_date).total_seconds()
 
             # 72 hours = 259200 seconds
@@ -329,10 +351,8 @@ def get_formatted_conversation(contact_id):
 
     # Add metadata about auto-start indices
     # Frontend can use this to render them differently or pre-populate the UI
-    return {
-        'messages': merged,
-        'auto_conversation_starts': auto_start_indices
-    }
+    return {"messages": merged, "auto_conversation_starts": auto_start_indices}
+
 
 def get_conversation_data():
     """Fetch conversation metadata for visualization from all databases."""
@@ -352,7 +372,12 @@ def get_conversation_data():
             contact_names = {}
             try:
                 import glob
-                contacts_dbs = glob.glob(os.path.expanduser("~/Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb"))
+
+                contacts_dbs = glob.glob(
+                    os.path.expanduser(
+                        "~/Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb"
+                    )
+                )
                 if contacts_dbs:
                     contacts_conn = sqlite3.connect(contacts_dbs[0])
                     contacts_cursor = contacts_conn.cursor()
@@ -378,7 +403,8 @@ def get_conversation_data():
 
             # Get all 1-on-1 conversations with message counts and time ranges
             # Filter out conversations with yourself
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT
                     h.id as contact,
                     h.person_centric_id,
@@ -403,7 +429,9 @@ def get_conversation_data():
                 GROUP BY h.id
                 HAVING message_count > 5 AND sent_count > 0
                 ORDER BY message_count DESC
-            """, (SELF_ADDRESS,))
+            """,
+                (SELF_ADDRESS,),
+            )
 
             conversations = []
             matched_count = 0
@@ -416,17 +444,21 @@ def get_conversation_data():
                     display_name = f"{contact_names[person_id]} ({contact})"
                     matched_count += 1
 
-                conversations.append({
-                    'contact': display_name,
-                    'messageCount': msg_count,
-                    'firstMessage': first_msg,
-                    'lastMessage': last_msg,
-                    'sentCount': sent,
-                    'receivedCount': received
-                })
+                conversations.append(
+                    {
+                        "contact": display_name,
+                        "messageCount": msg_count,
+                        "firstMessage": first_msg,
+                        "lastMessage": last_msg,
+                        "sentCount": sent,
+                        "receivedCount": received,
+                    }
+                )
 
             if contact_names:
-                print(f"   Matched {matched_count}/{len(conversations)} contacts with names")
+                print(
+                    f"   Matched {matched_count}/{len(conversations)} contacts with names"
+                )
 
             # Also get all messages for timeline density
             cursor.execute("""
@@ -462,11 +494,9 @@ def get_conversation_data():
             messages = []
             for row in cursor.fetchall():
                 contact, msg_date, is_from_me = row
-                messages.append({
-                    'contact': contact,
-                    'date': msg_date,
-                    'fromMe': bool(is_from_me)
-                })
+                messages.append(
+                    {"contact": contact, "date": msg_date, "fromMe": bool(is_from_me)}
+                )
 
             all_conversations.extend(conversations)
             all_messages.extend(messages)
@@ -477,54 +507,65 @@ def get_conversation_data():
             continue
 
     # Merge conversations with the same contact
-    from datetime import datetime as dt
     contact_map = {}
 
     for conv in all_conversations:
-        contact = conv['contact']
+        contact = conv["contact"]
         if contact not in contact_map:
             contact_map[contact] = conv
         else:
             # Merge with existing entry
             existing = contact_map[contact]
-            existing['messageCount'] += conv['messageCount']
-            existing['sentCount'] += conv['sentCount']
-            existing['receivedCount'] += conv['receivedCount']
+            existing["messageCount"] += conv["messageCount"]
+            existing["sentCount"] += conv["sentCount"]
+            existing["receivedCount"] += conv["receivedCount"]
 
             # Update first message if this one is earlier
-            if conv['firstMessage'] and (not existing['firstMessage'] or conv['firstMessage'] < existing['firstMessage']):
-                existing['firstMessage'] = conv['firstMessage']
+            if conv["firstMessage"] and (
+                not existing["firstMessage"]
+                or conv["firstMessage"] < existing["firstMessage"]
+            ):
+                existing["firstMessage"] = conv["firstMessage"]
 
             # Update last message if this one is later
-            if conv['lastMessage'] and (not existing['lastMessage'] or conv['lastMessage'] > existing['lastMessage']):
-                existing['lastMessage'] = conv['lastMessage']
+            if conv["lastMessage"] and (
+                not existing["lastMessage"]
+                or conv["lastMessage"] > existing["lastMessage"]
+            ):
+                existing["lastMessage"] = conv["lastMessage"]
 
     # Convert back to list and sort by message count
     merged_conversations = list(contact_map.values())
-    merged_conversations.sort(key=lambda x: x['messageCount'], reverse=True)
+    merged_conversations.sort(key=lambda x: x["messageCount"], reverse=True)
 
     # Calculate total messages and add percentage to each conversation
-    total_messages = sum(conv['messageCount'] for conv in merged_conversations)
+    total_messages = sum(conv["messageCount"] for conv in merged_conversations)
     for conv in merged_conversations:
-        conv['percentage'] = (conv['messageCount'] / total_messages * 100) if total_messages > 0 else 0
+        conv["percentage"] = (
+            (conv["messageCount"] / total_messages * 100) if total_messages > 0 else 0
+        )
 
-    return {'conversations': merged_conversations, 'messages': all_messages}
+    return {"conversations": merged_conversations, "messages": all_messages}
 
-@app.route('/')
+
+@app.route("/")
 def index():
-    return render_template('visualizer.html')
+    return render_template("visualizer.html")
 
-@app.route('/api/data')
+
+@app.route("/api/data")
 def data():
     return jsonify(get_conversation_data())
 
-@app.route('/api/conversation/<path:contact_id>')
+
+@app.route("/api/conversation/<path:contact_id>")
 def conversation_detail(contact_id):
     """Get detailed formatted conversation for a specific contact."""
     result = get_formatted_conversation(contact_id)
     return jsonify(result)
 
-@app.route('/api/generate-dataset', methods=['POST'])
+
+@app.route("/api/generate-dataset", methods=["POST"])
 def generate_dataset():
     """
     Generate training and validation data files based on selected conversations and custom tokens.
@@ -538,9 +579,9 @@ def generate_dataset():
     2. After 72+ hour breaks in conversation
     """
     data = request.json
-    selected_contacts = data.get('selected_contacts', [])
-    validation_contacts = data.get('validation_contacts', [])
-    conversation_starts = data.get('conversation_starts', {})
+    selected_contacts = data.get("selected_contacts", [])
+    validation_contacts = data.get("validation_contacts", [])
+    conversation_starts = data.get("conversation_starts", {})
 
     # Create output directory if it doesn't exist
     output_dir = "data/text_data"
@@ -554,8 +595,8 @@ def generate_dataset():
         with open(output_file, "w", encoding="utf-8") as f:
             for contact_id in contacts:
                 result = get_formatted_conversation(contact_id)
-                messages = result['messages']
-                auto_conversation_starts = result['auto_conversation_starts']
+                messages = result["messages"]
+                auto_conversation_starts = result["auto_conversation_starts"]
 
                 if not messages:
                     continue
@@ -574,15 +615,17 @@ def generate_dataset():
                 for idx, msg in enumerate(messages):
                     # Insert conversation start token if needed
                     if idx in all_start_indices:
-                        final_messages.append({'role': '', 'text': '<|ConversationStart|>'})
+                        final_messages.append(
+                            {"role": "", "text": "<|ConversationStart|>"}
+                        )
                     final_messages.append(msg)
 
                 # Write to file
                 for msg in final_messages:
-                    if msg['role']:  # Normal message
+                    if msg["role"]:  # Normal message
                         f.write(f"{msg['role']}{msg['text']}")
                     else:  # Special token
-                        f.write(msg['text'])
+                        f.write(msg["text"])
 
                 f.write("<|endoftext|>")  # End of conversation marker
 
@@ -594,19 +637,28 @@ def generate_dataset():
         write_conversations(validation_contacts, val_output_file)
 
     # Return success with file paths
-    return jsonify({
-        'success': True,
-        'training_file': train_output_file,
-        'validation_file': val_output_file if validation_contacts else None,
-        'training_count': len(selected_contacts),
-        'validation_count': len(validation_contacts)
-    })
+    return jsonify(
+        {
+            "success": True,
+            "training_file": train_output_file,
+            "validation_file": val_output_file if validation_contacts else None,
+            "training_count": len(selected_contacts),
+            "validation_count": len(validation_contacts),
+        }
+    )
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Visualize iMessage conversations from one or more databases')
-    parser.add_argument('--db', action='append', dest='databases',
-                        help='Path to chat.db file (can be specified multiple times)',
-                        default=[])
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Visualize iMessage conversations from one or more databases"
+    )
+    parser.add_argument(
+        "--db",
+        action="append",
+        dest="databases",
+        help="Path to chat.db file (can be specified multiple times)",
+        default=[],
+    )
     args = parser.parse_args()
 
     # If no databases specified, use default
@@ -621,7 +673,7 @@ if __name__ == '__main__':
             print(f"   - {db}")
 
     # Ensure templates directory exists
-    os.makedirs('templates', exist_ok=True)
+    os.makedirs("templates", exist_ok=True)
     print("🚀 Starting message visualizer...")
     print("📊 Open http://localhost:5001 in your browser")
     app.run(debug=True, port=5001)
