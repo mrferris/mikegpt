@@ -6,6 +6,9 @@ const SESSION_ID = 'session_' + Date.now();
 let conversationHistory = '';
 let lastUserMessageElement = null;
 
+// Auto-start mode: if true, MikeGPT sends the first message
+let mikeStartsFirst = true;
+
 // Update time in status bar
 function updateTime() {
     const now = new Date();
@@ -218,6 +221,105 @@ document.getElementById('message-input').addEventListener('keypress', (e) => {
 
 // Focus input on load
 document.getElementById('message-input').focus();
+
+// Auto-start: MikeGPT sends the first message
+async function autoStartConversation() {
+    const input = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+
+    // Disable input while generating
+    input.disabled = true;
+    sendButton.disabled = true;
+
+    // Show typing indicator immediately
+    showTypingIndicator();
+
+    try {
+        // Call API with empty message - the backend will use <|ConversationStart|><|Me|>
+        const response = await fetch(`${API_URL}/api/generate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: '',  // Empty message signals auto-start
+                session_id: SESSION_ID,
+                history: '',
+                auto_start: true  // Flag to tell backend MikeGPT starts first
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        // Read the stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let typingStartTime = Date.now();
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete messages (SSE format: "data: {...}\n\n")
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const jsonStr = line.slice(6);
+                    const data = JSON.parse(jsonStr);
+
+                    if (data.error) {
+                        hideTypingIndicator();
+                        addMessage(`Error: ${data.error}`, false);
+                        break;
+                    }
+
+                    if (data.response) {
+                        // Ensure typing indicator shows for at least 650ms
+                        const elapsed = Date.now() - typingStartTime;
+                        if (elapsed < 650) {
+                            await new Promise(resolve => setTimeout(resolve, 650 - elapsed));
+                        }
+
+                        hideTypingIndicator();
+
+                        // For auto-start, responses are always bot messages (no reactions possible yet)
+                        addMessage(data.response, false);
+
+                        // Show typing indicator again for next response
+                        showTypingIndicator();
+                        typingStartTime = Date.now();
+                    }
+
+                    if (data.done) {
+                        conversationHistory = data.history || conversationHistory;
+                    }
+                }
+            }
+        }
+
+    } catch (error) {
+        hideTypingIndicator();
+        addMessage(`Error: ${error.message}`, false);
+    } finally {
+        hideTypingIndicator();
+        // Re-enable input
+        input.disabled = false;
+        sendButton.disabled = false;
+        input.focus();
+    }
+}
+
+// Initialize: auto-start if enabled
+if (mikeStartsFirst) {
+    autoStartConversation();
+}
 
 // Get first user message from conversation
 function getFirstUserMessage() {

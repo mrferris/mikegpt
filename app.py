@@ -108,8 +108,8 @@ def beam_tree():
         return jsonify({"error": "No prompt provided"}), 400
 
     # Sanity check to prevent exponential explosion
-    if k > 50:
-        return jsonify({"error": "k must be <= 50"}), 400
+    if k > 500:
+        return jsonify({"error": "k must be <= 500"}), 400
     if n > 10:
         return (
             jsonify(
