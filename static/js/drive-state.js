@@ -48,3 +48,9 @@ let loadNextPagePromise = null; // Promise that resolves when current load compl
 // Children loading state
 let loadingMoreChildren = false;
 let loadMoreChildrenPromise = null; // Promise that resolves when current load completes
+
+// GRPO state
+let grpoResponses = [];  // Array of 8 response objects { text, tokens }
+let grpoRankings = [];   // Array of selected letter indices in order (0-7)
+let grpoGenerating = false;
+let grpoCurrentIndex = 0;  // Which response is currently generating

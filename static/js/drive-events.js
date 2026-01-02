@@ -43,6 +43,32 @@ document.addEventListener('keydown', (e) => {
     }
 
     if (document.getElementById('loading-screen').classList.contains('hidden')) {
+        // GRPO mode keyboard handling
+        if (rlMethod === 'grpo') {
+            // Check for Backspace and Enter FIRST (before letter checks)
+            if (e.key === 'Backspace') {
+                e.preventDefault();
+                handleGrpoBackspace();
+                return;
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (grpoRankings.length === 8) {
+                    submitGrpoRankings();
+                }
+                return;
+            } else if (e.key.length === 1 && e.key >= 'a' && e.key <= 'h') {
+                e.preventDefault();
+                handleGrpoKeyPress(e.key);
+                return;
+            } else if (e.key.length === 1 && e.key >= 'A' && e.key <= 'H') {
+                e.preventDefault();
+                handleGrpoKeyPress(e.key.toLowerCase());
+                return;
+            }
+            return; // Don't process DPO keys in GRPO mode
+        }
+
+        // DPO mode keyboard handling
         switch(e.key) {
             case 'ArrowLeft':
                 e.preventDefault();

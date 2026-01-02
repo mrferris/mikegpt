@@ -30,10 +30,18 @@ function setRLMethod(method) {
         tokenExplorer.classList.add('visible');
         tokenExplorer.classList.remove('hidden');
         rankingView.classList.remove('visible');
+        // Reset GRPO state when switching away
+        if (typeof resetGrpoState === 'function') {
+            resetGrpoState();
+        }
     } else {
         tokenExplorer.classList.remove('visible');
         tokenExplorer.classList.add('hidden');
         rankingView.classList.add('visible');
+        // Start GRPO generation when switching to GRPO mode
+        if (typeof startGrpoGeneration === 'function') {
+            startGrpoGeneration();
+        }
     }
 }
 

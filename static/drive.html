@@ -114,7 +114,21 @@
         </div>
 
         <div class="ranking-view" id="ranking-view">
-            <!-- GRPO ranking interface will go here -->
+            <div class="grpo-container">
+                <div class="grpo-prompt-column">
+                    <div class="grpo-prompt-label">Prompt</div>
+                    <div class="grpo-prompt-text" id="grpo-prompt-text"></div>
+                </div>
+                <div class="grpo-responses-column" id="grpo-responses">
+                    <!-- 8 response rows generated dynamically -->
+                </div>
+            </div>
+            <div class="grpo-instructions" id="grpo-instructions">
+                <span>Select options from best to worst</span>
+                <span class="key">A</span>-<span class="key">H</span>
+                <span class="key">BACKSPACE</span> undo
+                <span class="key">ENTER</span> submit
+            </div>
         </div>
     </div>
 
@@ -124,6 +138,7 @@
     <script src="js/drive-navigation.js"></script>
     <script src="js/drive-render.js"></script>
     <script src="js/drive-training.js"></script>
+    <script src="js/drive-grpo.js"></script>
     <script src="js/drive-events.js"></script>
 </body>
 </html>

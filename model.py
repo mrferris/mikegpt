@@ -195,6 +195,7 @@ class Model:
         # Tokenize the initial prompt
         prompt = "<|ConversationStart|><|Them|>" + prompt + "<|Me|>"
         tokens = self.tokenizer.encode(prompt)
+        print(f"[build_beam_tree] Input prompt tokens: {tokens}")
         if len(tokens) > self.context_length:
             tokens = tokens[-self.context_length :]
 
@@ -202,6 +203,7 @@ class Model:
 
         # Build the tree recursively
         def build_node(tokens_tensor, depth, cumulative_prob):
+            print(f"Depth: {depth}")
             if depth >= n:
                 return None
 
@@ -276,7 +278,7 @@ class Model:
         generated_any = False
 
         for _ in range(max_tokens):
-            token = self.next_token(use_top_k=True, top_k=3)
+            token = self.next_token(top_p=0.5)
 
             # 2. Handle special tokens
             if token in [
@@ -331,3 +333,11 @@ class Model:
         positive and negative responses, respectively.
         """
         return self.trainable_model.do_simpo_step(prompt, positive, negative)
+
+    def do_grpo_step(
+        self, prompt: list[int], responses_ranked: list[tuple[list[int], int]]
+    ) -> list[float]:
+        """
+        Returns a list containing change in probabilities for the respective responses.
+        """
+        return self.trainable_model.do_grpo_step(prompt, responses_ranked)

@@ -1110,3 +1110,196 @@ body.light-mode .rl-method-btn.active {
 .loading-text {
     animation: pulse 1.5s infinite;
 }
+
+/* GRPO ranking styles */
+.grpo-container {
+    position: absolute;
+    top: 180px;
+    bottom: 100px;
+    left: 0;
+    right: 0;
+    display: flex;
+}
+
+.grpo-prompt-column {
+    /* Takes left half, right edge at center - 7.5px */
+    width: calc(50% - 7.5px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 0 20px 0 60px;
+    box-sizing: border-box;
+}
+
+.grpo-prompt-label {
+    color: #999;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    max-width: 400px;
+    width: 100%;
+}
+
+.grpo-prompt-text {
+    font-size: 20px;
+    line-height: 1.6;
+    color: #fff;
+    padding: 30px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 400px;
+    width: 100%;
+    min-height: 150px;
+}
+
+.grpo-responses-column {
+    /* Takes right half, left edge at center + 7.5px */
+    width: calc(50% - 7.5px);
+    margin-left: 15px; /* The gap between columns */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    overflow-y: auto;
+    padding: 0 60px 0 20px;
+    box-sizing: border-box;
+}
+
+.grpo-response-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.grpo-response-row.generating {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.grpo-letter {
+    font-size: 16px;
+    font-weight: 600;
+    color: #999;
+    min-width: 24px;
+    text-transform: uppercase;
+    padding-top: 2px;
+}
+
+.grpo-response-text {
+    flex: 1;
+    font-size: 15px;
+    line-height: 1.5;
+    color: #fff;
+    min-height: 20px;
+}
+
+.grpo-response-text.streaming {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.grpo-response-text.empty {
+    color: #555;
+    font-style: italic;
+}
+
+.grpo-rank-badge {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    min-width: 40px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.grpo-rank-badge.visible {
+    opacity: 1;
+}
+
+/* Ranking colors - green gradient for top 4, red gradient for bottom 4 */
+.grpo-rank-1 { background: rgba(52, 199, 89, 0.35) !important; border-color: rgba(52, 199, 89, 0.5) !important; }
+.grpo-rank-2 { background: rgba(52, 199, 89, 0.27) !important; border-color: rgba(52, 199, 89, 0.4) !important; }
+.grpo-rank-3 { background: rgba(52, 199, 89, 0.19) !important; border-color: rgba(52, 199, 89, 0.3) !important; }
+.grpo-rank-4 { background: rgba(52, 199, 89, 0.11) !important; border-color: rgba(52, 199, 89, 0.2) !important; }
+.grpo-rank-5 { background: rgba(255, 59, 48, 0.11) !important; border-color: rgba(255, 59, 48, 0.2) !important; }
+.grpo-rank-6 { background: rgba(255, 59, 48, 0.19) !important; border-color: rgba(255, 59, 48, 0.3) !important; }
+.grpo-rank-7 { background: rgba(255, 59, 48, 0.27) !important; border-color: rgba(255, 59, 48, 0.4) !important; }
+.grpo-rank-8 { background: rgba(255, 59, 48, 0.35) !important; border-color: rgba(255, 59, 48, 0.5) !important; }
+
+/* GRPO instructions overlay */
+.grpo-instructions {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 15px 25px;
+    backdrop-filter: blur(10px);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: #999;
+    font-size: 14px;
+}
+
+.grpo-instructions .key {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-family: monospace;
+    font-size: 12px;
+    min-width: 24px;
+    text-align: center;
+    color: #fff;
+}
+
+.grpo-instructions.disabled {
+    opacity: 0.5;
+}
+
+/* Light mode GRPO styles */
+body.light-mode .grpo-prompt-text {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: #d1d1d1;
+    color: #000;
+}
+
+body.light-mode .grpo-response-row {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: #d1d1d1;
+}
+
+body.light-mode .grpo-response-text {
+    color: #000;
+}
+
+body.light-mode .grpo-response-text.streaming {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+body.light-mode .grpo-response-text.empty {
+    color: #999;
+}
+
+body.light-mode .grpo-instructions {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: #d1d1d1;
+}
+
+body.light-mode .grpo-instructions .key {
+    background: #F0F0F0;
+    border-color: #d1d1d1;
+    color: #000;
+}

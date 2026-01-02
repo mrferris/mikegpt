@@ -140,7 +140,14 @@ def beam_tree():
         )
 
     try:
+        print("\n=== BEAM TREE REQUEST ===")
+        print(f"Prompt: '{prompt}'")
+        print(f"k={k}, n={n}")
         tree = model.build_beam_tree(prompt, k=k, n=n)
+        print(
+            f"Top {k} tokens: {[(c['token_id'], c['token_str'], c['probability']) for c in tree['children'][:k]]}"
+        )
+        print("=========================\n")
         return jsonify(tree)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -168,6 +175,11 @@ def expand_depth():
     prompt = data.get("prompt", "").strip()
     nodes_to_expand = data.get("nodes", [])
     k = data.get("k", 5)
+
+    print("Expanding depth!!")
+    print(prompt)
+    print(nodes_to_expand)
+    print(k)
 
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
@@ -219,6 +231,137 @@ def expand_depth():
             result[path_key] = children
 
         return jsonify({"children_map": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/grpo-generate", methods=["POST"])
+def grpo_generate():
+    """
+    Generate 8 responses for GRPO ranking via streaming SSE.
+
+    Expects JSON:
+    {
+        "prompt": str,
+        "temperature": float (optional, default 1.0),
+        "top_k": int (optional),
+        "top_p": float (optional),
+        "use_top_k": bool (optional, default False)
+    }
+
+    Streams:
+    - { index: 0-7, token: "...", done: false } per token
+    - { index: 0-7, done: true, full_response: "...", tokens: [...] } when response complete
+    - { all_done: true, responses: [...] } when all 8 complete
+    """
+    data = request.json
+    prompt_text = data.get("prompt", "").strip()
+    temperature = data.get("temperature", 1.0)
+    top_k = data.get("top_k", 5)
+    top_p = data.get("top_p", 0.9)
+    use_top_k = data.get("use_top_k", False)
+
+    if not prompt_text:
+        return jsonify({"error": "No prompt provided"}), 400
+
+    def generate_stream():
+        try:
+            responses = []
+            full_prompt = f"<|ConversationStart|><|Them|>{prompt_text}<|Me|>"
+
+            for i in range(8):
+                model.prime(full_prompt)
+                current_response = ""
+                response_tokens = []
+                max_tokens = 100
+
+                for _ in range(max_tokens):
+                    token = model.next_token(
+                        temperature=temperature,
+                        top_p=top_p,
+                        top_k=top_k,
+                        use_top_k=use_top_k,
+                    )
+
+                    # Get the token ID from the last position in current_tokens
+                    token_id = int(model.current_tokens[0, -1].item())
+                    response_tokens.append(token_id)
+
+                    # Check for stop tokens
+                    if token in [
+                        "<|Me|>",
+                        "<|Them|>",
+                        "<|endoftext|>",
+                        "<|ConversationStart|>",
+                    ]:
+                        # Remove the stop token from the list
+                        response_tokens.pop()
+                        break
+
+                    current_response += token
+                    yield f"data: {json.dumps({'index': i, 'token': token, 'done': False})}\n\n"
+
+                # Send completion for this response
+                responses.append(
+                    {"text": current_response.strip(), "tokens": response_tokens}
+                )
+                yield f"data: {json.dumps({'index': i, 'done': True, 'full_response': current_response.strip(), 'tokens': response_tokens})}\n\n"
+
+            # Send final message with all responses
+            yield f"data: {json.dumps({'all_done': True, 'responses': responses})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(
+        stream_with_context(generate_stream()), mimetype="text/event-stream"
+    )
+
+
+@app.route("/api/grpo-train", methods=["POST"])
+def grpo_train():
+    """
+    Execute GRPO training step with ranked responses.
+
+    Expects JSON:
+    {
+        "prompt": str,
+        "responses_ranked": [[token_ids, rank], ...]  # rank 1 is best, 8 is worst
+    }
+
+    Returns probability changes for each response.
+    """
+    data = request.json
+    prompt_text = data.get("prompt", "")
+    responses_ranked = data.get("responses_ranked", [])
+
+    if not prompt_text or not responses_ranked:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    if len(responses_ranked) != 8:
+        return jsonify({"error": "Expected exactly 8 ranked responses"}), 400
+
+    try:
+        # Tokenize the prompt
+        full_prompt = f"<|ConversationStart|><|Them|>{prompt_text}<|Me|>"
+        prompt_tokens = model.tokenizer.encode(full_prompt)
+
+        # Convert to list of tuples (token_ids, rank)
+        ranked_tuples = [(r[0], r[1]) for r in responses_ranked]
+
+        # Call the GRPO training step
+        probability_changes = model.do_grpo_step(
+            prompt=prompt_tokens, responses_ranked=ranked_tuples
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "prompt_length": len(prompt_tokens),
+                "probability_changes": probability_changes,
+            }
+        )
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
