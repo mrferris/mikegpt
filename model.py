@@ -242,20 +242,34 @@ class Model:
 
         return tree
 
-    def generate_response_stream(self, conversation_history: str, user_message: str):
+    def generate_response_stream(
+        self,
+        conversation_history: str,
+        user_message: str,
+        auto_start: bool = False,
+        auto_start_prompt: str = None,
+    ):
         """
         Generate responses one at a time, yielding each as it's complete.
 
         Args:
             conversation_history: Previous conversation context
             user_message: The new message from the user
+            auto_start: If True, MikeGPT starts the conversation (no user message)
+            auto_start_prompt: The prompt to use for auto_start mode
 
         Yields:
             Individual response messages as they're generated
         """
 
         # 1. Build initial context and prime the model
-        context = conversation_history + f"<|Them|>{user_message}<|Me|>"
+        if auto_start and auto_start_prompt:
+            # MikeGPT starts first - use the provided prompt directly
+            context = auto_start_prompt
+        else:
+            # Normal mode - user sent a message
+            context = conversation_history + f"<|Them|>{user_message}<|Me|>"
+
         self.prime(context)
         current_response = ""
         max_tokens = 200  # safety cap
@@ -299,9 +313,15 @@ class Model:
             yield current_response.strip()
             generated_any = True
 
-        # If no responses, retry
+        # If no responses, retry (but not for auto_start to avoid infinite loops)
         if not generated_any:
-            yield from self.generate_response_stream(conversation_history, user_message)
+            if auto_start:
+                # For auto_start, yield a default greeting if nothing generated
+                yield "Hey"
+            else:
+                yield from self.generate_response_stream(
+                    conversation_history, user_message
+                )
 
     def do_dpo_step(
         self, prompt: list[int], positive: list[int], negative: list[int]

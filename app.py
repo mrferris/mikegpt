@@ -31,13 +31,17 @@ def generate():
     Generate and stream responses one by one.
 
     Streams Server-Sent Events (SSE) with each response as it's generated.
+
+    If auto_start=True, MikeGPT sends the first message (no user message required).
     """
     data = request.json
     user_message = data.get("message", "").strip()
     session_id = data.get("session_id", "default")
     history = data.get("history", "")
+    auto_start = data.get("auto_start", False)
 
-    if not user_message:
+    # If not auto_start, require a user message
+    if not auto_start and not user_message:
         return jsonify({"error": "No message provided"}), 400
 
     def generate_stream():
@@ -48,19 +52,34 @@ def generate():
                 history = conversations[session_id]
 
             # Start building new history
-            # Add <|ConversationStart|> only at the beginning of a new conversation
-            if not history:
-                new_history = f"<|ConversationStart|><|Them|>{user_message}"
+            if auto_start:
+                # MikeGPT starts first: use <|ConversationStart|><|Me|> as the prompt
+                new_history = "<|ConversationStart|><|Me|>"
+                prompt_for_model = new_history
             else:
-                new_history = history + f"<|Them|>{user_message}"
+                # Normal mode: user sends first message
+                if not history:
+                    new_history = f"<|ConversationStart|><|Them|>{user_message}"
+                else:
+                    new_history = history + f"<|Them|>{user_message}"
+                prompt_for_model = new_history
 
             # Stream each response as it's generated
-            for response in model.generate_response_stream(history, user_message):
+            for response in model.generate_response_stream(
+                history if not auto_start else "",
+                user_message,
+                auto_start=auto_start,
+                auto_start_prompt=prompt_for_model if auto_start else None,
+            ):
                 # Update history for this response
                 if response.startswith("<|") and response.endswith("|>"):
                     new_history += f"{response}"
                 else:
-                    new_history += f"<|Me|>{response}"
+                    if auto_start and new_history == "<|ConversationStart|><|Me|>":
+                        # First response in auto_start mode, don't add another <|Me|>
+                        new_history += f"{response}"
+                    else:
+                        new_history += f"<|Me|>{response}"
 
                 # Send this response immediately
                 yield f"data: {json.dumps({'response': response})}\n\n"
