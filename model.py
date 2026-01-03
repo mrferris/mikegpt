@@ -77,6 +77,12 @@ class Model:
 
         self.current_tokens = None  # running token buffer on device
 
+        # Cache full sorted probability distributions so repeated/expanding
+        # top-k queries for the same node don't need another forward pass.
+        # Key: path_key string, Value: (sorted_probs, sorted_indices) CPU tensors
+        self._probs_cache = {}
+        self._cache_prompt = None
+
     def prime(self, prompt: str):
         """Tokenize prompt once and store on device."""
         tokens = self.tokenizer.encode(prompt)
@@ -179,6 +185,145 @@ class Model:
                 results.append((token_id, token_str, probability))
 
             return results
+
+    def get_top_k_tokens_batch(self, sequences: list, k: int = 20, temperature: float = 1.0):
+        """
+        Get top K tokens for multiple sequences in a single batched forward pass.
+
+        Args:
+            sequences: List of token lists (potentially different lengths)
+            k: Number of top tokens to return per sequence
+            temperature: Temperature for scaling logits
+
+        Returns:
+            List of lists of tuples: [[(token_id, token_str, probability), ...], ...]
+        """
+        if not sequences:
+            return []
+
+        if len(sequences) == 1:
+            tokens_tensor = torch.tensor([sequences[0]], device=self.device, dtype=torch.long)
+            return [self.get_top_k_tokens(tokens_tensor, k=k, temperature=temperature)]
+
+        lengths = [len(seq) for seq in sequences]
+        max_len = max(lengths)
+
+        # Right-pad to equal length. Causal attention means padding after the
+        # last real token never affects earlier positions' outputs.
+        padded = [seq + [0] * (max_len - len(seq)) for seq in sequences]
+        batch_tensor = torch.tensor(padded, device=self.device, dtype=torch.long)
+
+        with torch.no_grad():
+            logits = self.model(batch_tensor)  # [N, max_len, vocab_size]
+
+            # Gather the logit vector at each sequence's last real token position
+            last_indices = torch.tensor(
+                [l - 1 for l in lengths], device=self.device, dtype=torch.long
+            )
+            # last_indices shape [N] -> [N, 1, 1] expanded to [N, 1, vocab_size]
+            gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
+            last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature  # [N, vocab_size]
+
+            probs = F.softmax(last_logits, dim=-1)  # [N, vocab_size]
+            top_probs, top_idx = torch.topk(probs, k=k, dim=-1)  # [N, k] each
+
+            # Move to CPU once for all decoding
+            top_probs_cpu = top_probs.cpu()
+            top_idx_cpu = top_idx.cpu()
+
+            batch_results = []
+            for i in range(len(sequences)):
+                results = []
+                for j in range(k):
+                    token_id = int(top_idx_cpu[i, j].item())
+                    token_str = self.tokenizer.decode([token_id])
+                    probability = float(top_probs_cpu[i, j].item())
+                    results.append((token_id, token_str, probability))
+                batch_results.append(results)
+
+            return batch_results
+
+    def _extract_top_k(self, cached, k):
+        """Extract top-k results from a cached (sorted_probs, sorted_indices) pair."""
+        sorted_probs, sorted_indices = cached
+        results = []
+        for j in range(min(k, len(sorted_probs))):
+            token_id = int(sorted_indices[j].item())
+            token_str = self.tokenizer.decode([token_id])
+            probability = float(sorted_probs[j].item())
+            results.append((token_id, token_str, probability))
+        return results
+
+    def get_top_k_cached_batch(self, sequences, path_keys, prompt, k=20, temperature=1.0):
+        """
+        Like get_top_k_tokens_batch but caches the full sorted probability
+        distribution for each node. Subsequent requests for the same node
+        (even with a larger k) are served from cache with zero GPU work.
+
+        Args:
+            sequences: List of token lists (potentially different lengths)
+            path_keys: List of cache key strings, one per sequence
+            prompt: The prompt string (cache is invalidated if this changes)
+            k: Number of top tokens to return per sequence
+            temperature: Temperature for scaling logits
+
+        Returns:
+            List of lists of tuples: [[(token_id, token_str, probability), ...], ...]
+        """
+        if not sequences:
+            return []
+
+        # Invalidate cache if prompt changed
+        if self._cache_prompt != prompt:
+            self._probs_cache.clear()
+            self._cache_prompt = prompt
+
+        # Separate cached vs uncached
+        all_results = [None] * len(sequences)
+        uncached = []  # (original_index, sequence)
+
+        for i, pk in enumerate(path_keys):
+            if pk in self._probs_cache:
+                all_results[i] = self._extract_top_k(self._probs_cache[pk], k)
+            else:
+                uncached.append((i, sequences[i]))
+
+        if not uncached:
+            return all_results
+
+        # Batched forward pass for uncached sequences only
+        uncached_indices, uncached_seqs = zip(*uncached)
+        uncached_seqs = list(uncached_seqs)
+
+        lengths = [len(seq) for seq in uncached_seqs]
+        max_len = max(lengths)
+
+        padded = [seq + [0] * (max_len - len(seq)) for seq in uncached_seqs]
+        batch_tensor = torch.tensor(padded, device=self.device, dtype=torch.long)
+
+        with torch.no_grad():
+            logits = self.model(batch_tensor)  # [N, max_len, vocab_size]
+
+            # Gather logits at each sequence's last real token position
+            last_indices = torch.tensor(
+                [l - 1 for l in lengths], device=self.device, dtype=torch.long
+            )
+            gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
+            last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature  # [N, vocab_size]
+
+            probs = F.softmax(last_logits, dim=-1)
+            sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
+
+            sorted_probs_cpu = sorted_probs.cpu()
+            sorted_indices_cpu = sorted_indices.cpu()
+
+        # Cache full distributions and extract top-k
+        for batch_i, orig_i in enumerate(uncached_indices):
+            cached = (sorted_probs_cpu[batch_i], sorted_indices_cpu[batch_i])
+            self._probs_cache[path_keys[orig_i]] = cached
+            all_results[orig_i] = self._extract_top_k(cached, k)
+
+        return all_results
 
     def build_beam_tree(self, prompt: str, k: int = 20, n: int = 100):
         """

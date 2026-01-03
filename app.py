@@ -185,34 +185,36 @@ def expand_depth():
         return jsonify({"error": "No prompt provided"}), 400
 
     try:
-        result = {}
+        # Encode prompt once, not per-node
+        prompt_tokens = model.tokenizer.encode(prompt)
+        if len(prompt_tokens) > model.context_length:
+            prompt_tokens = prompt_tokens[-model.context_length:]
 
+        # Build all token sequences and path keys upfront
+        sequences = []
+        path_keys = []
         for node_info in nodes_to_expand:
             path = node_info["path"]
             node_token_id = node_info["token_id"]
 
-            # Build token sequence by following the path
-            tokens = model.tokenizer.encode(prompt)
-            if len(tokens) > model.context_length:
-                tokens = tokens[-model.context_length :]
-
-            # Add path tokens + this node's token
-            for token_id in path:
-                tokens.append(token_id)
-                if len(tokens) > model.context_length:
-                    tokens = tokens[-model.context_length :]
-
+            tokens = list(prompt_tokens)
+            tokens.extend(path)
             tokens.append(node_token_id)
+
+            # Truncate to context length once
             if len(tokens) > model.context_length:
-                tokens = tokens[-model.context_length :]
+                tokens = tokens[-model.context_length:]
 
-            tokens_tensor = torch.tensor(
-                [tokens], device=model.device, dtype=torch.long
-            )
+            sequences.append(tokens)
+            path_keys.append(",".join(map(str, path + [node_token_id])))
 
-            # Get top k tokens for this node
-            top_tokens = model.get_top_k_tokens(tokens_tensor, k=k)
+        # Batched forward pass — cached nodes are served from cache, only
+        # uncached nodes hit the GPU.  Full distributions are stored so
+        # subsequent requests with larger k need zero GPU work.
+        batch_results = model.get_top_k_cached_batch(sequences, path_keys, prompt, k=k)
 
+        result = {}
+        for path_key, top_tokens in zip(path_keys, batch_results):
             children = []
             for token_id, token_str, probability in top_tokens:
                 children.append(
@@ -225,9 +227,6 @@ def expand_depth():
                         "children": None,  # Will be loaded lazily
                     }
                 )
-
-            # Use path + node_token_id as key
-            path_key = ",".join(map(str, path + [node_token_id]))
             result[path_key] = children
 
         return jsonify({"children_map": result})
