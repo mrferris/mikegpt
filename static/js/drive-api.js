@@ -57,6 +57,75 @@ function showError(message) {
     container.innerHTML = `<div class="error-message">${message}</div>`;
 }
 
+// --- Centralized expand-depth request queue ---
+// All expand-depth calls go through this queue. Requests arriving while
+// a previous request is in-flight are held and flushed as a single
+// combined HTTP call once the current one completes. This eliminates
+// the request pile-up that happens during fast scrolling.
+let _expandQueue = [];         // Array of { nodes, k, resolve, reject }
+let _expandFlushTimer = null;  // Scheduled flush timer
+let _expandInflight = false;   // Whether a request is currently in-flight
+
+function queueExpandDepth(nodes, k) {
+    if (nodes.length === 0) return Promise.resolve({});
+
+    return new Promise((resolve, reject) => {
+        _expandQueue.push({ nodes, k, resolve, reject });
+        if (!_expandFlushTimer) {
+            _expandFlushTimer = setTimeout(flushExpandQueue, 0);
+        }
+    });
+}
+
+async function flushExpandQueue() {
+    _expandFlushTimer = null;
+    if (_expandQueue.length === 0) return;
+    if (_expandInflight) return; // Will re-flush when current flight completes
+
+    _expandInflight = true;
+    const batch = _expandQueue.splice(0);
+
+    // Deduplicate nodes by path_key, take max k
+    const nodeMap = new Map();
+    let maxK = 0;
+    for (const req of batch) {
+        maxK = Math.max(maxK, req.k);
+        for (const node of req.nodes) {
+            const pk = [...node.path, node.token_id].join(',');
+            if (!nodeMap.has(pk)) {
+                nodeMap.set(pk, { path: node.path, token_id: node.token_id });
+            }
+        }
+    }
+
+    try {
+        const response = await fetch('/api/expand-depth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: treeData.prompt,
+                nodes: Array.from(nodeMap.values()),
+                k: maxK
+            })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            for (const req of batch) req.resolve(data.children_map);
+        } else {
+            const err = new Error(data.error || 'expand-depth failed');
+            for (const req of batch) req.reject(err);
+        }
+    } catch (error) {
+        for (const req of batch) req.reject(error);
+    } finally {
+        _expandInflight = false;
+        if (_expandQueue.length > 0) {
+            _expandFlushTimer = setTimeout(flushExpandQueue, 0);
+        }
+    }
+}
+
 function startGame() {
     document.getElementById('loading-screen').classList.add('hidden');
     document.getElementById('rl-method-toggle').classList.add('visible');
@@ -176,21 +245,12 @@ async function preloadDepthLevel(pageStart, pageEnd, targetDepth) {
     }
 
     try {
-        const response = await fetch('/api/expand-depth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: treeData.prompt,
-                nodes: nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
-                k: initialK + 1  // +1 for separator visibility when this becomes depth 0
-            })
-        });
-
-        const data = await response.json();
-        if (!response.ok) return;
+        const childrenMap = await queueExpandDepth(
+            nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
+            initialK + 1
+        );
 
         // Merge children into tree (without re-rendering)
-        const childrenMap = data.children_map;
         for (const nodeInfo of nodesToExpand) {
             if (childrenMap[nodeInfo.tokenKey]) {
                 if (nodeInfo.node && !nodeInfo.node.children) {
@@ -256,47 +316,35 @@ async function loadPageDepths(pageNum) {
             loadingTokenChildren.add(n.tokenKey);
         }
 
-        const response = await fetch('/api/expand-depth', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                prompt: treeData.prompt,
-                nodes: nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
-                k: initialK + 1  // +1 for separator visibility when this becomes depth 0
-            })
-        });
+        const childrenMap = await queueExpandDepth(
+            nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
+            initialK + 1
+        );
 
-        const data = await response.json();
-        if (response.ok) {
-            // Merge children into the tree
-            const childrenMap = data.children_map;
+        // Merge children into the tree
+        for (const nodeInfo of nodesToExpand) {
+            if (childrenMap[nodeInfo.tokenKey]) {
+                const newChildren = childrenMap[nodeInfo.tokenKey];
+                for (const child of newChildren) {
+                    child.cumulative_prob = nodeInfo.node.cumulative_prob * child.probability;
+                }
 
-            for (const nodeInfo of nodesToExpand) {
-                if (childrenMap[nodeInfo.tokenKey]) {
-                    const newChildren = childrenMap[nodeInfo.tokenKey];
+                if (!nodeInfo.node.children) {
+                    nodeInfo.node.children = newChildren;
+                } else {
+                    const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
                     for (const child of newChildren) {
-                        child.cumulative_prob = nodeInfo.node.cumulative_prob * child.probability;
-                    }
-
-                    if (!nodeInfo.node.children) {
-                        nodeInfo.node.children = newChildren;
-                    } else {
-                        const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
-                        for (const child of newChildren) {
-                            if (!existingIds.has(child.token_id)) {
-                                nodeInfo.node.children.push(child);
-                            }
+                        if (!existingIds.has(child.token_id)) {
+                            nodeInfo.node.children.push(child);
                         }
                     }
                 }
             }
-
-            console.log(`✓ Loaded depths for page ${pageNum}`);
-            loadedPageDepths.add(pageNum);
-            renderLevels();
         }
+
+        console.log(`✓ Loaded depths for page ${pageNum}`);
+        loadedPageDepths.add(pageNum);
+        renderLevels();
     } catch (error) {
         console.error(`Error loading depths for page ${pageNum}:`, error);
     } finally {
@@ -415,42 +463,32 @@ async function loadMoreChildrenForCurrentNode() {
         // Build the path for the API call
         const pathTokenIds = currentPath.map(p => p.token_id);
 
-        const response = await fetch('/api/expand-depth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: treeData.prompt,
-                nodes: [{
-                    path: pathTokenIds.slice(0, -1), // Parent path
-                    token_id: pathTokenIds[pathTokenIds.length - 1] // Current node's token_id
-                }],
-                k: targetChildCount // Request this many children total
-            })
-        });
+        const childrenMap = await queueExpandDepth(
+            [{
+                path: pathTokenIds.slice(0, -1),
+                token_id: pathTokenIds[pathTokenIds.length - 1]
+            }],
+            targetChildCount
+        );
 
-        const data = await response.json();
-        if (response.ok) {
-            const childrenMap = data.children_map;
-            const pathKey = pathTokenIds.join(',');
+        const pathKey = pathTokenIds.join(',');
+        if (childrenMap[pathKey]) {
+            const newChildren = childrenMap[pathKey];
 
-            if (childrenMap[pathKey]) {
-                const newChildren = childrenMap[pathKey];
-
-                // Merge: add any children we don't already have
-                const existingIds = new Set(currentNode.children.map(c => c.token_id));
-                for (const child of newChildren) {
-                    if (!existingIds.has(child.token_id)) {
-                        child.cumulative_prob = (currentNode.cumulative_prob || currentNode.probability) * child.probability;
-                        currentNode.children.push(child);
-                    }
+            // Merge: add any children we don't already have
+            const existingIds = new Set(currentNode.children.map(c => c.token_id));
+            for (const child of newChildren) {
+                if (!existingIds.has(child.token_id)) {
+                    child.cumulative_prob = (currentNode.cumulative_prob || currentNode.probability) * child.probability;
+                    currentNode.children.push(child);
                 }
-
-                console.log(`✓ Loaded more children (now ${currentNode.children.length})`);
-                renderLevels(); // Always re-render after loading new data
-
-                // Also load depth for the newly loaded children
-                topUpCurrentLevelChildren();
             }
+
+            console.log(`✓ Loaded more children (now ${currentNode.children.length})`);
+            renderLevels();
+
+            // Also load depth for the newly loaded children
+            topUpCurrentLevelChildren();
         }
     } catch (error) {
         console.error('Error loading more children:', error);
@@ -503,43 +541,33 @@ async function topUpCurrentLevelChildren() {
     console.log(`Topping up ${nodesToExpand.length} nodes' children to k+1...`);
 
     try {
-        const response = await fetch('/api/expand-depth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: treeData.prompt,
-                nodes: nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
-                k: initialK + 1
-            })
-        });
+        const childrenMap = await queueExpandDepth(
+            nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
+            initialK + 1
+        );
 
-        const data = await response.json();
-        if (response.ok) {
-            const childrenMap = data.children_map;
+        for (const nodeInfo of nodesToExpand) {
+            if (childrenMap[nodeInfo.tokenKey]) {
+                const newChildren = childrenMap[nodeInfo.tokenKey];
+                for (const child of newChildren) {
+                    child.cumulative_prob = (nodeInfo.node.cumulative_prob || nodeInfo.node.probability) * child.probability;
+                }
 
-            for (const nodeInfo of nodesToExpand) {
-                if (childrenMap[nodeInfo.tokenKey]) {
-                    const newChildren = childrenMap[nodeInfo.tokenKey];
+                if (!nodeInfo.node.children) {
+                    nodeInfo.node.children = newChildren;
+                } else {
+                    const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
                     for (const child of newChildren) {
-                        child.cumulative_prob = (nodeInfo.node.cumulative_prob || nodeInfo.node.probability) * child.probability;
-                    }
-
-                    if (!nodeInfo.node.children) {
-                        nodeInfo.node.children = newChildren;
-                    } else {
-                        const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
-                        for (const child of newChildren) {
-                            if (!existingIds.has(child.token_id)) {
-                                nodeInfo.node.children.push(child);
-                            }
+                        if (!existingIds.has(child.token_id)) {
+                            nodeInfo.node.children.push(child);
                         }
                     }
                 }
             }
-
-            console.log(`✓ Topped up children to k+1`);
-            renderLevels();
         }
+
+        console.log(`✓ Topped up children to k+1`);
+        renderLevels();
     } catch (error) {
         console.error('Error topping up children:', error);
     } finally {
@@ -608,45 +636,35 @@ async function doEnsureCurrentTokenHasDepth() {
         console.log(`Loading children for ${nodesToLoad.length} tokens...`);
 
         try {
-            const response = await fetch('/api/expand-depth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt: treeData.prompt,
-                    nodes: nodesToLoad.map(n => ({ path: n.path, token_id: n.token_id })),
-                    k: initialK + 1
-                })
-            });
+            const childrenMap = await queueExpandDepth(
+                nodesToLoad.map(n => ({ path: n.path, token_id: n.token_id })),
+                initialK + 1
+            );
 
-            const data = await response.json();
-            if (response.ok) {
-                const childrenMap = data.children_map;
+            for (const nodeInfo of nodesToLoad) {
+                const pathKey = [...nodeInfo.path, nodeInfo.token_id].join(',');
 
-                for (const nodeInfo of nodesToLoad) {
-                    const pathKey = [...nodeInfo.path, nodeInfo.token_id].join(',');
+                if (childrenMap[pathKey]) {
+                    const newChildren = childrenMap[pathKey];
+                    for (const child of newChildren) {
+                        child.cumulative_prob = (nodeInfo.node.cumulative_prob || nodeInfo.node.probability) * child.probability;
+                    }
 
-                    if (childrenMap[pathKey]) {
-                        const newChildren = childrenMap[pathKey];
+                    if (!nodeInfo.node.children) {
+                        nodeInfo.node.children = newChildren;
+                    } else {
+                        const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
                         for (const child of newChildren) {
-                            child.cumulative_prob = (nodeInfo.node.cumulative_prob || nodeInfo.node.probability) * child.probability;
-                        }
-
-                        if (!nodeInfo.node.children) {
-                            nodeInfo.node.children = newChildren;
-                        } else {
-                            const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
-                            for (const child of newChildren) {
-                                if (!existingIds.has(child.token_id)) {
-                                    nodeInfo.node.children.push(child);
-                                }
+                            if (!existingIds.has(child.token_id)) {
+                                nodeInfo.node.children.push(child);
                             }
                         }
                     }
                 }
-
-                console.log(`✓ Loaded children for ${nodesToLoad.length} tokens`);
-                renderLevels();
             }
+
+            console.log(`✓ Loaded children for ${nodesToLoad.length} tokens`);
+            renderLevels();
         } catch (error) {
             console.error('Error loading children for tokens:', error);
         } finally {
@@ -711,42 +729,32 @@ async function ensurePreviewLayersLoaded() {
     }
 
     try {
-        const response = await fetch('/api/expand-depth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                prompt: treeData.prompt,
-                nodes: nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
-                k: initialK + 1
-            })
-        });
+        const childrenMap = await queueExpandDepth(
+            nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
+            initialK + 1
+        );
 
-        const data = await response.json();
-        if (response.ok) {
-            const childrenMap = data.children_map;
+        for (const nodeInfo of nodesToExpand) {
+            if (childrenMap[nodeInfo.tokenKey]) {
+                const newChildren = childrenMap[nodeInfo.tokenKey];
+                for (const child of newChildren) {
+                    child.cumulative_prob = (nodeInfo.node.cumulative_prob || nodeInfo.node.probability) * child.probability;
+                }
 
-            for (const nodeInfo of nodesToExpand) {
-                if (childrenMap[nodeInfo.tokenKey]) {
-                    const newChildren = childrenMap[nodeInfo.tokenKey];
+                if (!nodeInfo.node.children) {
+                    nodeInfo.node.children = newChildren;
+                } else {
+                    const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
                     for (const child of newChildren) {
-                        child.cumulative_prob = (nodeInfo.node.cumulative_prob || nodeInfo.node.probability) * child.probability;
-                    }
-
-                    if (!nodeInfo.node.children) {
-                        nodeInfo.node.children = newChildren;
-                    } else {
-                        const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
-                        for (const child of newChildren) {
-                            if (!existingIds.has(child.token_id)) {
-                                nodeInfo.node.children.push(child);
-                            }
+                        if (!existingIds.has(child.token_id)) {
+                            nodeInfo.node.children.push(child);
                         }
                     }
                 }
             }
-
-            renderLevels();
         }
+
+        renderLevels();
     } catch (error) {
         console.error('Error loading preview layers:', error);
     } finally {
@@ -768,28 +776,9 @@ async function loadNextLayer(nodes, pathToNodes) {
             token_id: node.token_id
         }));
 
-        const response = await fetch('/api/expand-depth', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                prompt: treeData.prompt,  // expand-depth needs full prompt with special tokens
-                nodes: nodesToExpand,
-                k: initialK + 1  // +1 for separator visibility when this becomes depth 0
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error('Failed to load depth:', data.error);
-            isLoadingNextLayer = false;
-            return;
-        }
+        const childrenMap = await queueExpandDepth(nodesToExpand, initialK + 1);
 
         // Merge children into the tree
-        const childrenMap = data.children_map;
 
         for (const node of nodes) {
             // Only set children if node doesn't already have them

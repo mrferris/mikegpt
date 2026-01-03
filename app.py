@@ -448,4 +448,4 @@ if __name__ == "__main__":
 
     # Create static folder if it doesn't exist
     os.makedirs("static", exist_ok=True)
-    app.run(debug=True, port=5002, host="127.0.0.1")
+    app.run(debug=False, port=5002, host="127.0.0.1")
