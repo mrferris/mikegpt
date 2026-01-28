@@ -305,9 +305,17 @@ async function loadPageDepths(pageNum) {
         }
 
         if (nodesToExpand.length === 0) {
-            console.log(`Page ${pageNum} tokens already have k+1 children`);
+            // Only mark as loaded if the page actually has tokens.
+            // If loadNextPage() hasn't returned yet, the tokens don't exist
+            // and we should NOT mark the page as loaded — otherwise the
+            // preload pipeline thinks depth is done when it never ran.
+            const pageTokenCount = Math.min(pageEnd, treeData.children.length) - pageStart;
+            const hasTokens = pageTokenCount > 0 && treeData.children[pageStart] != null;
+            if (hasTokens) {
+                console.log(`Page ${pageNum} tokens already have k+1 children`);
+                loadedPageDepths.add(pageNum);
+            }
             loadingPageDepths.delete(pageNum);
-            loadedPageDepths.add(pageNum);
             return;
         }
 
@@ -403,6 +411,8 @@ async function loadNextPage(pageNum) {
 
         const newData = await response.json();
         if (response.ok) {
+            const oldTotalK = totalK;
+
             // Add new tokens
             for (let i = totalK; i < newData.children.length; i++) {
                 treeData.children[i] = newData.children[i];
@@ -410,7 +420,21 @@ async function loadNextPage(pageNum) {
 
             // Set totalK to actual tokens returned, not requested (API may return fewer)
             totalK = Math.max(totalK, newData.children.length);
-            renderLevels(); // Always re-render after loading new data
+
+            // Clear loadedPageDepths for pages that just received new tokens.
+            // preloadPageFullDepth may have run before these tokens existed,
+            // found nothing, and returned early. Now that the tokens are here,
+            // we need to let depth loading re-run for these pages.
+            const firstNewPage = Math.floor(oldTotalK / initialK);
+            const lastNewPage = Math.floor((totalK - 1) / initialK);
+            for (let p = firstNewPage; p <= lastNewPage; p++) {
+                loadedPageDepths.delete(p);
+            }
+
+            renderLevels();
+
+            // Now that first-layer tokens exist, preload their depths
+            preloadPageFullDepth(pageNum);
 
             console.log(`✓ Loaded page ${pageNum} first layer (totalK now ${totalK})`);
         }
@@ -763,6 +787,99 @@ async function ensurePreviewLayersLoaded() {
             loadingTokenChildren.delete(n.tokenKey);
         }
     }
+}
+
+// Preload all 4 rendered depth layers for tokens on the current page at deeper levels.
+// Only follows the first-child preview chain per token (what the renderer actually
+// displays at depths 1-3), so this is O(pageSize × 3) nodes total — NOT exponential.
+async function preloadDeeperLevelFullDepth() {
+    if (currentPath.length === 0) return; // Only for deeper levels
+
+    // Step 1: depth 1 — ensure page tokens have children
+    await topUpCurrentLevelChildren();
+
+    const nodes = getCurrentNodes();
+    if (!nodes || nodes.length === 0) return;
+
+    const pathTokenIds = currentPath.map(p => p.token_id);
+    const pageStart = currentPage * initialK;
+    const pageEnd = Math.min(pageStart + initialK + 1, nodes.length);
+
+    // Depth passes 1-3: at each pass, walk one more level down the first-child
+    // chain and load children for the node found there.
+    //   depthPass 1 → loads children for nodes[i].children[0]         (render depth 2)
+    //   depthPass 2 → loads children for nodes[i].children[0].c[0]    (render depth 3)
+    //   depthPass 3 → loads children for nodes[i].c[0].c[0].c[0]      (render depth 4, future-proofs)
+    for (let depthPass = 1; depthPass <= 3; depthPass++) {
+        const nodesToExpand = [];
+
+        for (let i = pageStart; i < pageEnd; i++) {
+            let node = nodes[i];
+            if (!node) continue;
+
+            // Walk down first-child chain to the target depth
+            let walkPath = [...pathTokenIds];
+            let valid = true;
+
+            for (let d = 0; d < depthPass; d++) {
+                walkPath.push(node.token_id);
+                if (!node.children || node.children.length === 0) { valid = false; break; }
+                node = node.children[0];
+            }
+
+            if (!valid || !node) continue;
+
+            const tokenKey = [...walkPath, node.token_id].join(',');
+            if (loadingTokenChildren.has(tokenKey)) continue;
+            if (node.children && node.children.length >= initialK + 1) continue;
+
+            nodesToExpand.push({
+                path: walkPath,
+                token_id: node.token_id,
+                tokenKey: tokenKey,
+                node: node
+            });
+        }
+
+        if (nodesToExpand.length === 0) continue;
+
+        // Mark as loading
+        for (const n of nodesToExpand) loadingTokenChildren.add(n.tokenKey);
+
+        try {
+            const childrenMap = await queueExpandDepth(
+                nodesToExpand.map(n => ({ path: n.path, token_id: n.token_id })),
+                initialK + 1
+            );
+
+            for (const nodeInfo of nodesToExpand) {
+                if (childrenMap[nodeInfo.tokenKey]) {
+                    const newChildren = childrenMap[nodeInfo.tokenKey];
+                    for (const child of newChildren) {
+                        child.cumulative_prob = (nodeInfo.node.cumulative_prob || nodeInfo.node.probability) * child.probability;
+                    }
+
+                    if (!nodeInfo.node.children) {
+                        nodeInfo.node.children = newChildren;
+                    } else {
+                        const existingIds = new Set(nodeInfo.node.children.map(c => c.token_id));
+                        for (const child of newChildren) {
+                            if (!existingIds.has(child.token_id)) {
+                                nodeInfo.node.children.push(child);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error preloading deeper level depth pass ${depthPass}:`, error);
+        } finally {
+            for (const n of nodesToExpand) loadingTokenChildren.delete(n.tokenKey);
+        }
+    }
+
+    // Re-render with all depth data loaded (may be no-op during animation)
+    renderLevels();
 }
 
 async function loadNextLayer(nodes, pathToNodes) {

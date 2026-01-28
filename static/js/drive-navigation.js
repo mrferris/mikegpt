@@ -162,8 +162,10 @@ async function navigateRight() {
     if (currentIndex % initialK >= initialK - 2) {
         if (isRootLevel) {
             loadNextPage(currentPage + 1);
+            preloadPageFullDepth(currentPage + 1); // start full depth preload early
         } else {
             loadMoreChildrenForCurrentNode();
+            preloadDeeperLevelFullDepth(); // start full depth preload early
         }
     }
 
@@ -190,44 +192,35 @@ function animatePageTransition(fromPage, toPage) {
 
     const isRootLevel = currentPath.length === 0;
 
-    // Start loading next page's tokens immediately (in parallel with animation)
-    // This ensures the separator and first token of the following page are ready
-    let loadPromise;
+    // Fire ALL data loading immediately — not in the animation timeout.
+    // Previously, preloadPageFullDepth lived inside the 420ms timeout,
+    // which got cancelled during fast scrolling. Now preloading is
+    // decoupled from the animation lifecycle entirely.
+    let deeperPreloadPromise = null;
     if (isRootLevel) {
-        const nextPageToLoad = toPage + 1;
-        loadPromise = loadNextPage(nextPageToLoad);
+        loadNextPage(toPage + 1);         // first layer for page after next
+        preloadPageFullDepth(toPage);     // full depth (1-4) for target page
+        preloadPageFullDepth(toPage + 1); // full depth for page after next
     } else {
-        // For deeper levels, load more children for the current node
-        loadPromise = loadMoreChildrenForCurrentNode();
+        loadMoreChildrenForCurrentNode();
+        // Fire full depth preload immediately — loads depths 1-4 for ALL page
+        // tokens by walking the first-child preview chain. O(pageSize × 3) nodes.
+        deeperPreloadPromise = preloadDeeperLevelFullDepth();
     }
 
-    // Delay rendering until after the animation completes (400ms)
+    // Animation timeout: unlock rendering and do a final render.
     animationTimeoutId = setTimeout(async () => {
         animationTimeoutId = null;
-        isAnimating = false; // Animation complete, allow re-renders
+        isAnimating = false;
 
-        if (isRootLevel) {
-            // Wait for both depth loading and next page tokens to complete
-            await Promise.all([
-                loadPageDepths(toPage),
-                loadPromise
-            ]);
-        } else {
-            // For deeper levels, wait for children load then top up
-            await loadPromise;
-            await topUpCurrentLevelChildren();
+        // At deeper levels, wait for the full depth preload to finish before
+        // rendering so all 4 layers appear at once (no pop-in).
+        if (!isRootLevel && deeperPreloadPromise) {
+            await deeperPreloadPromise;
         }
-        renderLevels(); // Re-render now that data is loaded
-
-        // Ensure current token has depth (important for deeper levels)
+        renderLevels();
         ensureCurrentTokenHasDepth();
-
-        if (isRootLevel) {
-            // Preload full depth for next page in background (for smooth future navigation)
-            const nextPageToLoad = toPage + 1;
-            preloadPageFullDepth(nextPageToLoad);
-        }
-    }, 420); // Slightly longer than the 400ms animation
+    }, 420);
 }
 
 function selectAndAdvance() {
@@ -257,10 +250,13 @@ function selectAndAdvance() {
     renderLevels();
     updatePathDisplay();
 
-    // Top up the new level's children to k+1 for separator visibility
-    topUpCurrentLevelChildren();
+    // Preload all 4 depth layers for the new deeper level's first page.
+    // This replaces the old topUpCurrentLevelChildren + ensureCurrentTokenHasDepth
+    // combo which only loaded depth 1 for page tokens and depth 1-4 for the
+    // current token. Now ALL page tokens get full depth preloaded.
+    preloadDeeperLevelFullDepth();
 
-    // Ensure the new current token (at the deeper level) has depth loaded
+    // Also ensure the current token's preview chain is loaded (covers edge cases)
     ensureCurrentTokenHasDepth();
 }
 
