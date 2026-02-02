@@ -31,7 +31,7 @@ async function startDrive() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ prompt, k: k + 1, n })
+            body: JSON.stringify({ prompt, k: k + 1, n, raw: !!promptParam })
         });
 
         const data = await response.json();
@@ -173,7 +173,8 @@ async function loadSecondPageTokens() {
             body: JSON.stringify({
                 prompt: originalPrompt,
                 k: initialK * 2 + 1,  // Load 2k tokens + 1 for page 2 separator
-                n: 1  // Only first layer for new tokens
+                n: 1,  // Only first layer for new tokens
+                raw: !!promptParam
             })
         });
 
@@ -405,7 +406,8 @@ async function loadNextPage(pageNum) {
             body: JSON.stringify({
                 prompt: originalPrompt,
                 k: newTotalK,
-                n: 1  // First layer only
+                n: 1,  // First layer only
+                raw: !!promptParam
             })
         });
 

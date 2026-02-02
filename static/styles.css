@@ -149,6 +149,12 @@ body {
     background: #007AFF;
     color: white;
     border-bottom-right-radius: 4px;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+.message.bot .message-bubble:hover {
+    filter: brightness(1.15);
 }
 
 /* Typing Bubble */

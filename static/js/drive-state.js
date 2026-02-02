@@ -8,6 +8,30 @@ if (isLightMode) {
     document.body.classList.add('light-mode');
 }
 
+// Check for prompt and token_ids query parameters (used when clicking bot messages in iMessage view)
+const promptParam = urlParams.get('prompt');
+const tokenIdsParam = urlParams.get('token_ids');
+const badTextParam = urlParams.get('bad_text');  // The message text to mark as negative
+
+const navTokenIds = tokenIdsParam && tokenIdsParam.length > 0
+    ? tokenIdsParam.split(',').map(Number).filter(n => !isNaN(n))
+    : null;
+
+// When auto-starting from iMessage, hide prompt inputs and show loading text immediately
+if (promptParam) {
+    const promptContainer = document.querySelector('.prompt-container');
+    const inputWrapper = document.querySelector('.input-wrapper-drive');
+    const samplingToggle = document.querySelector('.sampling-toggle-container');
+    if (promptContainer) promptContainer.style.display = 'none';
+    if (inputWrapper) inputWrapper.style.display = 'none';
+    if (samplingToggle) samplingToggle.style.display = 'none';
+
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) {
+        errorContainer.innerHTML = '<div class="loading-text">Building token tree...</div>';
+    }
+}
+
 // Core data
 let treeData = null;
 let originalPrompt = null; // Store the original user prompt (without special tokens)

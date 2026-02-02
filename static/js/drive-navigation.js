@@ -269,3 +269,89 @@ function goBack() {
     renderLevels();
     updatePathDisplay();
 }
+
+// Directly fetch children for a single node, bypassing the batched queue.
+// Returns the children array or null.
+async function fetchChildrenDirect(parentPathTokenIds, tokenId) {
+    const pathKey = [...parentPathTokenIds, tokenId].join(',');
+    try {
+        const response = await fetch('/api/expand-depth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: treeData.prompt,
+                nodes: [{ path: parentPathTokenIds, token_id: tokenId }],
+                k: initialK + 1
+            })
+        });
+        const data = await response.json();
+        if (response.ok && data.children_map && data.children_map[pathKey]) {
+            return data.children_map[pathKey];
+        }
+    } catch (e) {
+        console.error('fetchChildrenDirect failed:', e);
+    }
+    return null;
+}
+
+// Navigate to the token path matching the given token IDs.
+// Loads deeper children on the fly when the tree runs out of depth.
+// Returns true if at least one token was matched.
+async function navigateToTokenIds(tokenIds) {
+    if (!treeData || !treeData.children || !tokenIds || tokenIds.length === 0) return false;
+
+    let nodes = treeData.children;
+    let matchedNodes = [];
+
+    for (let t = 0; t < tokenIds.length && nodes; t++) {
+        const targetId = tokenIds[t];
+        let foundIdx = -1;
+
+        for (let i = 0; i < nodes.length; i++) {
+            if (nodes[i].token_id === targetId) {
+                foundIdx = i;
+                break;
+            }
+        }
+
+        if (foundIdx === -1) break;
+
+        matchedNodes.push({ index: foundIdx, node: nodes[foundIdx] });
+
+        // If more tokens to match but no children loaded, fetch them
+        if (t < tokenIds.length - 1 && (!nodes[foundIdx].children || nodes[foundIdx].children.length === 0)) {
+            const pathTokenIds = matchedNodes.map(m => m.node.token_id);
+            const children = await fetchChildrenDirect(
+                pathTokenIds.slice(0, -1),
+                pathTokenIds[pathTokenIds.length - 1]
+            );
+            if (children) {
+                nodes[foundIdx].children = children;
+            }
+        }
+
+        nodes = nodes[foundIdx].children;
+    }
+
+    if (matchedNodes.length === 0) return false;
+
+    // Build currentPath from all but the last match, set currentIndex to the last
+    currentPath = [];
+    for (let i = 0; i < matchedNodes.length - 1; i++) {
+        const m = matchedNodes[i];
+        currentPath.push({
+            index: m.index,
+            token: m.node.token_str,
+            probability: m.node.probability,
+            token_id: m.node.token_id
+        });
+    }
+
+    const last = matchedNodes[matchedNodes.length - 1];
+    currentIndex = last.index;
+    currentPage = Math.floor(currentIndex / initialK);
+
+    renderLevels();
+    updatePathDisplay();
+    return true;
+}

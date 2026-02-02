@@ -14,7 +14,6 @@ from model import Model
 import os
 import argparse
 import json
-import torch
 
 app = Flask(__name__, static_folder="static")
 
@@ -65,7 +64,7 @@ def generate():
                 prompt_for_model = new_history
 
             # Stream each response as it's generated
-            for response in model.generate_response_stream(
+            for response, token_ids in model.generate_response_stream(
                 history if not auto_start else "",
                 user_message,
                 auto_start=auto_start,
@@ -81,8 +80,9 @@ def generate():
                     else:
                         new_history += f"<|Me|>{response}"
 
-                # Send this response immediately
-                yield f"data: {json.dumps({'response': response})}\n\n"
+                # Send this response immediately with token IDs
+                print(f"[generate] Sending response='{response}' with token_ids={token_ids}")
+                yield f"data: {json.dumps({'response': response, 'token_ids': token_ids})}\n\n"
 
             # Save final history
             conversations[session_id] = new_history
@@ -143,7 +143,8 @@ def beam_tree():
         print("\n=== BEAM TREE REQUEST ===")
         print(f"Prompt: '{prompt}'")
         print(f"k={k}, n={n}")
-        tree = model.build_beam_tree(prompt, k=k, n=n)
+        raw = data.get("raw", False)
+        tree = model.build_beam_tree(prompt, k=k, n=n, raw=raw)
         print(
             f"Top {k} tokens: {[(c['token_id'], c['token_str'], c['probability']) for c in tree['children'][:k]]}"
         )
@@ -176,11 +177,6 @@ def expand_depth():
     nodes_to_expand = data.get("nodes", [])
     k = data.get("k", 5)
 
-    print("Expanding depth!!")
-    print(prompt)
-    print(nodes_to_expand)
-    print(k)
-
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
 
@@ -188,7 +184,7 @@ def expand_depth():
         # Encode prompt once, not per-node
         prompt_tokens = model.tokenizer.encode(prompt)
         if len(prompt_tokens) > model.context_length:
-            prompt_tokens = prompt_tokens[-model.context_length:]
+            prompt_tokens = prompt_tokens[-model.context_length :]
 
         # Build all token sequences and path keys upfront
         sequences = []
@@ -203,7 +199,7 @@ def expand_depth():
 
             # Truncate to context length once
             if len(tokens) > model.context_length:
-                tokens = tokens[-model.context_length:]
+                tokens = tokens[-model.context_length :]
 
             sequences.append(tokens)
             path_keys.append(",".join(map(str, path + [node_token_id])))
@@ -448,4 +444,4 @@ if __name__ == "__main__":
 
     # Create static folder if it doesn't exist
     os.makedirs("static", exist_ok=True)
-    app.run(debug=False, port=5002, host="127.0.0.1")
+    app.run(debug=True, port=5002, host="127.0.0.1")

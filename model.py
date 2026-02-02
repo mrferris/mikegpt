@@ -186,7 +186,9 @@ class Model:
 
             return results
 
-    def get_top_k_tokens_batch(self, sequences: list, k: int = 20, temperature: float = 1.0):
+    def get_top_k_tokens_batch(
+        self, sequences: list, k: int = 20, temperature: float = 1.0
+    ):
         """
         Get top K tokens for multiple sequences in a single batched forward pass.
 
@@ -202,7 +204,9 @@ class Model:
             return []
 
         if len(sequences) == 1:
-            tokens_tensor = torch.tensor([sequences[0]], device=self.device, dtype=torch.long)
+            tokens_tensor = torch.tensor(
+                [sequences[0]], device=self.device, dtype=torch.long
+            )
             return [self.get_top_k_tokens(tokens_tensor, k=k, temperature=temperature)]
 
         lengths = [len(seq) for seq in sequences]
@@ -222,7 +226,9 @@ class Model:
             )
             # last_indices shape [N] -> [N, 1, 1] expanded to [N, 1, vocab_size]
             gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
-            last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature  # [N, vocab_size]
+            last_logits = (
+                logits.gather(1, gather_idx).squeeze(1) / temperature
+            )  # [N, vocab_size]
 
             probs = F.softmax(last_logits, dim=-1)  # [N, vocab_size]
             top_probs, top_idx = torch.topk(probs, k=k, dim=-1)  # [N, k] each
@@ -254,7 +260,9 @@ class Model:
             results.append((token_id, token_str, probability))
         return results
 
-    def get_top_k_cached_batch(self, sequences, path_keys, prompt, k=20, temperature=1.0):
+    def get_top_k_cached_batch(
+        self, sequences, path_keys, prompt, k=20, temperature=1.0
+    ):
         """
         Like get_top_k_tokens_batch but caches the full sorted probability
         distribution for each node. Subsequent requests for the same node
@@ -309,7 +317,9 @@ class Model:
                 [l - 1 for l in lengths], device=self.device, dtype=torch.long
             )
             gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
-            last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature  # [N, vocab_size]
+            last_logits = (
+                logits.gather(1, gather_idx).squeeze(1) / temperature
+            )  # [N, vocab_size]
 
             probs = F.softmax(last_logits, dim=-1)
             sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
@@ -325,7 +335,9 @@ class Model:
 
         return all_results
 
-    def build_beam_tree(self, prompt: str, k: int = 20, n: int = 100):
+    def build_beam_tree(
+        self, prompt: str, k: int = 20, n: int = 100, raw: bool = False
+    ):
         """
         Build a beam search tree showing top K tokens at each level for N levels.
 
@@ -333,12 +345,14 @@ class Model:
             prompt: Initial prompt to start from
             k: Number of top tokens to explore at each level
             n: Number of levels deep to explore
+            raw: If True, use prompt as-is without wrapping in conversation tokens
 
         Returns:
             Tree structure with nodes containing token info and children
         """
         # Tokenize the initial prompt
-        prompt = "<|ConversationStart|><|Them|>" + prompt + "<|Me|>"
+        if not raw:
+            prompt = "<|ConversationStart|><|Them|>" + prompt + "<|Me|>"
         tokens = self.tokenizer.encode(prompt)
         print(f"[build_beam_tree] Input prompt tokens: {tokens}")
         if len(tokens) > self.context_length:
@@ -406,7 +420,8 @@ class Model:
             auto_start_prompt: The prompt to use for auto_start mode
 
         Yields:
-            Individual response messages as they're generated
+            Tuples of (response_text, token_ids) where token_ids includes
+            the leading <|Me|> token for tree navigation.
         """
 
         # 1. Build initial context and prime the model
@@ -418,12 +433,19 @@ class Model:
             context = conversation_history + f"<|Them|>{user_message}<|Me|>"
 
         self.prime(context)
+
+        # Get <|Me|> token ID for the leading tag (part of context, not generated)
+        me_token_id = self.tokenizer.encode("<|Me|>")[0]
+
         current_response = ""
+        # First response starts with the context's <|Me|> for tree navigation
+        response_token_ids = [me_token_id]
         max_tokens = 200  # safety cap
         generated_any = False
 
         for _ in range(max_tokens):
             token = self.next_token(top_p=0.5)
+            token_id = int(self.current_tokens[0, -1].item())
 
             # 2. Handle special tokens
             if token in [
@@ -433,13 +455,17 @@ class Model:
                 "<|ConversationStart|>",
             ]:
                 if current_response.strip():
-                    yield current_response.strip()
+                    yield (current_response.strip(), response_token_ids)
                     generated_any = True
                     current_response = ""
+                    response_token_ids = []
 
                 # stop generating once next speaker starts
                 if token in ["<|Them|>", "<|endoftext|>", "<|ConversationStart|>"]:
                     break
+
+                # <|Me|> separator — include in next response's token IDs
+                response_token_ids = [token_id]
 
             elif token in [
                 "<|Liked|>",
@@ -449,22 +475,24 @@ class Model:
                 "<|Questioned|>",
                 "<|Emphasized|>",
             ]:
-                # single reaction token as message
-                yield token
+                # Reaction: include any accumulated token IDs (e.g. preceding <|Me|>)
+                yield (token, response_token_ids + [token_id])
                 generated_any = True
+                response_token_ids = []
 
             else:
                 current_response += token
+                response_token_ids.append(token_id)
 
         if current_response.strip():
-            yield current_response.strip()
+            yield (current_response.strip(), response_token_ids)
             generated_any = True
 
         # If no responses, retry (but not for auto_start to avoid infinite loops)
         if not generated_any:
             if auto_start:
                 # For auto_start, yield a default greeting if nothing generated
-                yield "Hey"
+                yield ("Hey", [me_token_id] + self.tokenizer.encode("Hey"))
             else:
                 yield from self.generate_response_stream(
                     conversation_history, user_message

@@ -5,6 +5,12 @@ const SESSION_ID = 'session_' + Date.now();
 
 let conversationHistory = '';
 let lastUserMessageElement = null;
+let messageHistorySnapshots = [];
+// Running history within the current response cycle, mirrors backend's new_history
+let cycleHistory = '';
+// Token ID tracking for tree navigation
+let cycleTokenIds = [];           // Running token IDs for current generation cycle
+let messageTokenIdSnapshots = []; // Parallel to messageHistorySnapshots
 
 // Auto-start mode: if true, MikeGPT sends the first message
 let mikeStartsFirst = true;
@@ -32,7 +38,7 @@ const REACTIONS = {
 };
 
 // Add message to UI
-function addMessage(text, isUser) {
+function addMessage(text, isUser, tokenIds) {
     const messagesContainer = document.getElementById('messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
@@ -50,6 +56,30 @@ function addMessage(text, isUser) {
     // Store reference if it's a user message
     if (isUser) {
         lastUserMessageElement = messageDiv;
+    } else {
+        // Track the history state before this bot message (use cycleHistory which
+        // mirrors the backend's running history, including prior messages in this cycle)
+        const snapshotIndex = messageHistorySnapshots.length;
+        messageHistorySnapshots.push(cycleHistory);
+        messageTokenIdSnapshots.push([...cycleTokenIds]);
+        messageDiv.dataset.snapshotIndex = snapshotIndex;
+        messageDiv.dataset.tokenIds = JSON.stringify(tokenIds || []);
+
+        // Click handler: open MikeRL drive to mark this response as negative
+        bubbleDiv.style.cursor = 'pointer';
+        bubbleDiv.addEventListener('click', () => {
+            const historySnapshot = messageHistorySnapshots[messageDiv.dataset.snapshotIndex];
+            const msgTokenIds = JSON.parse(messageDiv.dataset.tokenIds || '[]');
+            const msgText = text;  // The actual message text
+
+            // historySnapshot ends with <|Me|> - the prompt for this response
+            // Skip the first token ID (the <|Me|> separator) since it's part of the prompt
+            const responseTokenIds = msgTokenIds.slice(1);
+
+            window.open('/drive?prompt=' + encodeURIComponent(historySnapshot) +
+                '&token_ids=' + encodeURIComponent(responseTokenIds.join(',')) +
+                '&bad_text=' + encodeURIComponent(msgText), '_blank');
+        });
     }
 
     return messageDiv;
@@ -125,6 +155,14 @@ async function sendMessage() {
     // Show typing indicator
     showTypingIndicator();
 
+    // Build running history for this cycle, mirroring backend logic
+    if (!conversationHistory) {
+        cycleHistory = '<|ConversationStart|><|Them|>' + message;
+    } else {
+        cycleHistory = conversationHistory + '<|Them|>' + message;
+    }
+    cycleTokenIds = [];  // Reset token IDs for new cycle
+
     try {
         // Call API with EventSource for streaming
         const response = await fetch(`${API_URL}/api/generate`, {
@@ -181,9 +219,20 @@ async function sendMessage() {
 
                         // Check if it's a reaction
                         if (data.response.startsWith('<|') && data.response.endsWith('|>')) {
+                            // Update cycle history with reaction, then apply
+                            cycleHistory += data.response;
+                            cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
                             addReaction(data.response);
                         } else {
-                            addMessage(data.response, false);
+                            // Snapshot happens inside addMessage; update cycleHistory
+                            // to include <|Me|> BEFORE the snapshot so it captures the
+                            // prompt the model saw for this response
+                            cycleHistory += '<|Me|>';
+                            // Token IDs from backend already include leading <|Me|>
+                            addMessage(data.response, false, data.token_ids);
+                            // After snapshot, append the response text for next message's snapshot
+                            cycleHistory += data.response;
+                            cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
                         }
 
                         // Show typing indicator again for next response
@@ -233,6 +282,11 @@ async function autoStartConversation() {
 
     // Show typing indicator immediately
     showTypingIndicator();
+
+    // Set initial history to match the prompt the model sees for auto-start
+    conversationHistory = '<|ConversationStart|><|Me|>';
+    cycleHistory = '<|ConversationStart|><|Me|>';
+    cycleTokenIds = [];  // Reset token IDs for new cycle
 
     try {
         // Call API with empty message - the backend will use <|ConversationStart|><|Me|>
@@ -289,8 +343,15 @@ async function autoStartConversation() {
 
                         hideTypingIndicator();
 
-                        // For auto-start, responses are always bot messages (no reactions possible yet)
-                        addMessage(data.response, false);
+                        // For auto-start, first response doesn't add <|Me|>,
+                        // subsequent ones do (mirrors backend logic)
+                        if (cycleHistory !== '<|ConversationStart|><|Me|>') {
+                            cycleHistory += '<|Me|>';
+                        }
+                        // Token IDs from backend already include leading <|Me|>
+                        addMessage(data.response, false, data.token_ids);
+                        cycleHistory += data.response;
+                        cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
 
                         // Show typing indicator again for next response
                         showTypingIndicator();

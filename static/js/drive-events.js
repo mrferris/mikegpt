@@ -10,6 +10,27 @@ document.addEventListener('DOMContentLoaded', () => {
         historyList.classList.toggle('open');
         dropdownArrow.classList.toggle('open');
     });
+
+    // Auto-fill and auto-start if prompt was passed via query parameter
+    if (promptParam) {
+        const promptInput = document.getElementById('prompt');
+        if (promptInput) {
+            promptInput.value = promptParam;
+            startDrive().then(() => {
+                // If bad_text was passed, add it directly as a negative example
+                // Stay at depth 0 - don't navigate into the tree
+                if (badTextParam && navTokenIds && navTokenIds.length > 0) {
+                    selectedPaths.push({
+                        type: 'negative',
+                        path: badTextParam,
+                        token_ids: navTokenIds,
+                        timestamp: Date.now()
+                    });
+                    updateSelectionsPanel();
+                }
+            });
+        }
+    }
 });
 
 // Enter to start in prompt inputs

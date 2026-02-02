@@ -46,9 +46,13 @@ function setRLMethod(method) {
 }
 
 function markPath(type) {
-    const path = getCurrentFullPath();
+    const fullPath = getCurrentFullPath();
+    // Strip the prompt to show only the response tokens in selections panel
+    const responsePath = fullPath.startsWith(treeData.prompt)
+        ? fullPath.slice(treeData.prompt.length)
+        : fullPath;
     const tokenIds = getCurrentTokenIds();
-    selectedPaths.push({ type, path, token_ids: tokenIds, timestamp: Date.now() });
+    selectedPaths.push({ type, path: responsePath, token_ids: tokenIds, timestamp: Date.now() });
     updateSelectionsPanel();
 }
 
@@ -74,10 +78,7 @@ function updateSelectionsPanel() {
         positiveItems.forEach(item => {
             const div = document.createElement('div');
             div.className = 'selection-item positive';
-            div.innerHTML = `
-                <strong>✓ GOOD</strong><br>
-                ${item.path.substring(0, 50)}${item.path.length > 50 ? '...' : ''}
-            `;
+            div.innerHTML = `<strong>✓ GOOD</strong><br>${item.path}`;
             selectionsList.appendChild(div);
         });
     } else {
@@ -92,10 +93,7 @@ function updateSelectionsPanel() {
         negativeItems.forEach(item => {
             const div = document.createElement('div');
             div.className = 'selection-item negative';
-            div.innerHTML = `
-                <strong>✗ BAD</strong><br>
-                ${item.path.substring(0, 50)}${item.path.length > 50 ? '...' : ''}
-            `;
+            div.innerHTML = `<strong>✗ BAD</strong><br>${item.path}`;
             selectionsList.appendChild(div);
         });
     } else {

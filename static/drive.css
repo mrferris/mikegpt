@@ -1005,6 +1005,9 @@ body.light-mode .rl-method-btn.active {
     border-radius: 6px;
     font-size: 13px;
     border-left: 3px solid #0f0;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 .selection-item.negative {
