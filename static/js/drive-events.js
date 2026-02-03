@@ -11,6 +11,25 @@ document.addEventListener('DOMContentLoaded', () => {
         dropdownArrow.classList.toggle('open');
     });
 
+    // Fetch persistent training history
+    fetch('/api/training-history')
+        .then(res => res.json())
+        .then(data => {
+            if (data.steps && data.steps.length > 0) {
+                trainingHistory = data.steps.map(step => ({
+                    timestamp: new Date(step.timestamp).getTime(),
+                    positiveChange: step.probability_changes?.[0] ?? 0,
+                    negativeChange: step.probability_changes?.[step.probability_changes?.length - 1] ?? 0,
+                    positivePaths: step.responses?.slice(0, Math.ceil(step.responses.length / 2)) || [],
+                    negativePaths: step.responses?.slice(Math.ceil(step.responses.length / 2)) || [],
+                    type: step.type || 'pair',
+                    allChanges: step.probability_changes
+                }));
+                updateTrainingHistory();
+            }
+        })
+        .catch(err => console.error('Failed to load training history:', err));
+
     // Auto-fill and auto-start if prompt was passed via query parameter
     if (promptParam) {
         const promptInput = document.getElementById('prompt');
@@ -64,8 +83,8 @@ document.addEventListener('keydown', (e) => {
     }
 
     if (document.getElementById('loading-screen').classList.contains('hidden')) {
-        // GRPO mode keyboard handling
-        if (rlMethod === 'grpo') {
+        // Group mode keyboard handling
+        if (rlMethod === 'group') {
             // Check for Backspace and Enter FIRST (before letter checks)
             if (e.key === 'Backspace') {
                 e.preventDefault();
@@ -86,10 +105,10 @@ document.addEventListener('keydown', (e) => {
                 handleGrpoKeyPress(e.key.toLowerCase());
                 return;
             }
-            return; // Don't process DPO keys in GRPO mode
+            return; // Don't process pair mode keys in group mode
         }
 
-        // DPO mode keyboard handling
+        // Pair mode keyboard handling
         switch(e.key) {
             case 'ArrowLeft':
                 e.preventDefault();

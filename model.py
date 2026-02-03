@@ -498,19 +498,68 @@ class Model:
                     conversation_history, user_message
                 )
 
-    def do_dpo_step(
-        self, prompt: list[int], positive: list[int], negative: list[int]
-    ) -> tuple[float]:
-        """
-        Returns a tuple containing the change in probablities for the
-        positive and negative responses, respectively.
-        """
-        return self.trainable_model.do_simpo_step(prompt, positive, negative)
-
-    def do_grpo_step(
-        self, prompt: list[int], responses_ranked: list[tuple[list[int], int]]
+    def do_training_step(
+        self,
+        prompt: list[int],
+        responses: list[list[int]],
+        rewards: list[float],
+        num_steps: int = 1
     ) -> list[float]:
         """
-        Returns a list containing change in probabilities for the respective responses.
+        Unified GRPO-based training for any group size.
+
+        For pair mode: responses=[positive, negative], rewards=[1.0, -1.0]
+        For group mode: responses=[resp1..resp8], rewards=[8,7,6,5,4,3,2,1] (from ranks)
+
+        Returns list of probability changes (as percentages) for each response.
         """
-        return self.trainable_model.do_grpo_step(prompt, responses_ranked)
+        from torch.nn.utils.rnn import pad_sequence
+        from lm.training.reinforcement.log_probs import calculate_model_log_probs
+
+        group_size = len(responses)
+
+        # Prepare tensors for log prob calculation
+        prompt_tensor = torch.tensor(prompt, dtype=torch.long, device=self.device).expand(group_size, -1)
+        prompt_lengths = torch.tensor([len(prompt)] * group_size, device=self.device)
+        response_lengths = torch.tensor([len(r) for r in responses], device=self.device)
+        response_tensor = pad_sequence(
+            [torch.tensor(r, dtype=torch.long, device=self.device) for r in responses],
+            batch_first=True,
+            padding_value=0,
+        )
+
+        # Calculate log probs before training
+        with torch.no_grad():
+            before_log_probs = calculate_model_log_probs(
+                self.model,
+                prompt_tensor,
+                prompt_lengths,
+                response_tensor,
+                response_lengths,
+            )
+
+        # Execute the GRPO training step
+        self.trainable_model.do_grpo_step(
+            model=self.model,
+            prompt=prompt,
+            responses=responses,
+            rewards=rewards,
+            num_steps=num_steps
+        )
+
+        # Calculate log probs after training
+        with torch.no_grad():
+            after_log_probs = calculate_model_log_probs(
+                self.model,
+                prompt_tensor,
+                prompt_lengths,
+                response_tensor,
+                response_lengths,
+            )
+
+        # Convert to probability changes (as percentages)
+        before_probs = torch.exp(before_log_probs) * 100
+        after_probs = torch.exp(after_log_probs) * 100
+        prob_changes = (after_probs - before_probs).tolist()
+
+        return prob_changes

@@ -18,27 +18,32 @@ function toggleSamplingMethod() {
 }
 
 function setRLMethod(method) {
+    const wasGroup = rlMethod === 'group';
     rlMethod = method;
-    document.getElementById('dpo-btn').classList.toggle('active', method === 'dpo');
-    document.getElementById('grpo-btn').classList.toggle('active', method === 'grpo');
+    document.getElementById('pair-btn').classList.toggle('active', method === 'pair');
+    document.getElementById('group-btn').classList.toggle('active', method === 'group');
 
     // Toggle views
     const tokenExplorer = document.getElementById('token-explorer');
     const rankingView = document.getElementById('ranking-view');
 
-    if (method === 'dpo') {
+    if (method === 'pair') {
         tokenExplorer.classList.add('visible');
         tokenExplorer.classList.remove('hidden');
         rankingView.classList.remove('visible');
-        // Reset GRPO state when switching away
+        // Reset group state when switching away
         if (typeof resetGrpoState === 'function') {
             resetGrpoState();
+        }
+        // Re-render tree only when switching FROM group to pair
+        if (wasGroup && typeof renderLevels === 'function') {
+            renderLevels();
         }
     } else {
         tokenExplorer.classList.remove('visible');
         tokenExplorer.classList.add('hidden');
         rankingView.classList.add('visible');
-        // Start GRPO generation when switching to GRPO mode
+        // Start group generation when switching to group mode
         if (typeof startGrpoGeneration === 'function') {
             startGrpoGeneration();
         }
@@ -179,6 +184,7 @@ async function exportSelections() {
     }
 
     try {
+        // Use unified training endpoint with responses + rewards
         const response = await fetch('/api/train', {
             method: 'POST',
             headers: {
@@ -186,8 +192,8 @@ async function exportSelections() {
             },
             body: JSON.stringify({
                 prompt: treeData.prompt,
-                positive_token_ids: positiveTokenIds,
-                negative_token_ids: negativeTokenIds
+                responses: [positiveTokenIds[0], negativeTokenIds[0]],
+                rewards: [1.0, -1.0]
             })
         });
 
@@ -203,8 +209,8 @@ async function exportSelections() {
 
         trainingHistory.push({
             timestamp: Date.now(),
-            positiveChange: result.positive_change_percent,
-            negativeChange: result.negative_change_percent,
+            positiveChange: result.probability_changes[0],
+            negativeChange: result.probability_changes[1],
             positivePaths: positivePaths,
             negativePaths: negativePaths
         });

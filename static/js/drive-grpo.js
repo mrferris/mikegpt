@@ -232,21 +232,21 @@ async function submitGrpoRankings() {
     if (grpoRankings.length !== 8) return;
 
     try {
-        // Build responses_ranked array: [[token_ids, rank], ...]
-        // rank 1 is best, 8 is worst
-        const responsesRanked = grpoRankings.map((responseIndex, rankIndex) => {
-            const response = grpoResponses[responseIndex];
-            return [response.tokens, rankIndex + 1];  // rank is 1-indexed
-        });
+        // Build responses and rewards arrays
+        // grpoRankings[i] = responseIndex that got rank i+1
+        // rank 1 is best (highest reward), rank 8 is worst (lowest reward)
+        const responses = grpoRankings.map(responseIndex => grpoResponses[responseIndex].tokens);
+        const rewards = grpoRankings.map((_, rankIndex) => 8 - rankIndex);  // rank 1 → 8, rank 8 → 1
 
-        const response = await fetch('/api/grpo-train', {
+        const response = await fetch('/api/train', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                prompt: originalPrompt,
-                responses_ranked: responsesRanked
+                prompt: `<|ConversationStart|><|Them|>${originalPrompt}<|Me|>`,
+                responses: responses,
+                rewards: rewards
             })
         });
 
@@ -263,7 +263,7 @@ async function submitGrpoRankings() {
         startGrpoGeneration();
 
     } catch (error) {
-        console.error('GRPO training failed:', error);
+        console.error('Group training failed:', error);
         alert('Training error: ' + error.message);
     }
 }
@@ -280,7 +280,7 @@ function addGrpoToHistory(result) {
 
     trainingHistory.push({
         timestamp: Date.now(),
-        type: 'grpo',
+        type: 'group',
         positiveChange: result.probability_changes[0] || 0,
         negativeChange: result.probability_changes[7] || 0,
         positivePaths: rankedPaths.slice(0, 4),

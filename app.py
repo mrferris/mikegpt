@@ -14,8 +14,31 @@ from model import Model
 import os
 import argparse
 import json
+import yaml
+from pathlib import Path
+from datetime import datetime
 
 app = Flask(__name__, static_folder="static")
+
+TRAINING_HISTORY_PATH = Path(__file__).parent / "data" / "training_history.yml"
+
+
+def load_training_history():
+    """Load training history from YAML file."""
+    if not TRAINING_HISTORY_PATH.exists():
+        return {"steps": []}
+    with open(TRAINING_HISTORY_PATH) as f:
+        return yaml.safe_load(f) or {"steps": []}
+
+
+def save_training_step(step_data: dict):
+    """Append a training step to the YAML file."""
+    history = load_training_history()
+    step_data["id"] = len(history["steps"]) + 1
+    history["steps"].append(step_data)
+    TRAINING_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(TRAINING_HISTORY_PATH, "w") as f:
+        yaml.dump(history, f, default_flow_style=False)
 
 # Initialize model
 model = None
@@ -108,6 +131,12 @@ def reset():
         del conversations[session_id]
 
     return jsonify({"success": True})
+
+
+@app.route("/api/training-history", methods=["GET"])
+def get_training_history():
+    """Return all training history."""
+    return jsonify(load_training_history())
 
 
 @app.route("/api/beam-tree", methods=["POST"])
@@ -313,100 +342,61 @@ def grpo_generate():
     )
 
 
-@app.route("/api/grpo-train", methods=["POST"])
-def grpo_train():
+@app.route("/api/train", methods=["POST"])
+def train():
     """
-    Execute GRPO training step with ranked responses.
+    Unified training endpoint for both pair and group modes.
 
     Expects JSON:
     {
         "prompt": str,
-        "responses_ranked": [[token_ids, rank], ...]  # rank 1 is best, 8 is worst
+        "responses": [[int, ...], ...],  # Token ID sequences for each response
+        "rewards": [float, ...]          # Reward for each response
     }
 
     Returns probability changes for each response.
     """
     data = request.json
     prompt_text = data.get("prompt", "")
-    responses_ranked = data.get("responses_ranked", [])
+    responses = data.get("responses", [])
+    rewards = data.get("rewards", [])
 
-    if not prompt_text or not responses_ranked:
+    if not prompt_text or not responses or not rewards:
         return jsonify({"error": "Missing required fields"}), 400
 
-    if len(responses_ranked) != 8:
-        return jsonify({"error": "Expected exactly 8 ranked responses"}), 400
+    if len(responses) != len(rewards):
+        return jsonify({"error": "responses and rewards must have same length"}), 400
 
     try:
         # Tokenize the prompt
-        full_prompt = f"<|ConversationStart|><|Them|>{prompt_text}<|Me|>"
-        prompt_tokens = model.tokenizer.encode(full_prompt)
+        prompt_tokens = model.tokenizer.encode(prompt_text)
 
-        # Convert to list of tuples (token_ids, rank)
-        ranked_tuples = [(r[0], r[1]) for r in responses_ranked]
-
-        # Call the GRPO training step
-        probability_changes = model.do_grpo_step(
-            prompt=prompt_tokens, responses_ranked=ranked_tuples
+        # Call unified training step
+        probability_changes = model.do_training_step(
+            prompt=prompt_tokens,
+            responses=responses,
+            rewards=rewards,
+            num_steps=1
         )
+
+        # Determine type based on group size
+        train_type = "pair" if len(responses) == 2 else "group"
+
+        # Save to persistent training history
+        save_training_step({
+            "timestamp": datetime.now().isoformat(),
+            "type": train_type,
+            "prompt": prompt_text,
+            "responses": responses,
+            "rewards": rewards,
+            "probability_changes": probability_changes,
+        })
 
         return jsonify(
             {
                 "success": True,
                 "prompt_length": len(prompt_tokens),
                 "probability_changes": probability_changes,
-            }
-        )
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/train", methods=["POST"])
-def train():
-    """
-    Train the model using DPO with positive and negative token ID sequences.
-
-    Expects JSON:
-    {
-        "prompt": str,
-        "positive_token_ids": [[int, ...], ...],  # Token ID sequences (continuations only)
-        "negative_token_ids": [[int, ...], ...]   # Token ID sequences (continuations only)
-    }
-    """
-    data = request.json
-    prompt_text = data.get("prompt", "")
-    positive_token_ids = data.get("positive_token_ids", [])
-    negative_token_ids = data.get("negative_token_ids", [])
-
-    if not prompt_text or not positive_token_ids or not negative_token_ids:
-        return jsonify({"error": "Missing required fields"}), 400
-
-    try:
-        # Tokenize the prompt (this is the shared context)
-        prompt_tokens = model.tokenizer.encode(prompt_text)
-
-        # Use the first positive and first negative token sequence for this training step
-        # The token IDs from the frontend are already the continuation only (not including prompt)
-        positive_continuation = positive_token_ids[0]
-        negative_continuation = negative_token_ids[0]
-
-        # Call the DPO training step
-        probability_changes = model.do_dpo_step(
-            prompt=prompt_tokens,
-            positive=positive_continuation,
-            negative=negative_continuation,
-        )
-
-        return jsonify(
-            {
-                "success": True,
-                "prompt_length": len(prompt_tokens),
-                "positive_length": len(positive_continuation),
-                "negative_length": len(negative_continuation),
-                "num_positive_paths": len(positive_token_ids),
-                "num_negative_paths": len(negative_token_ids),
-                "positive_change_percent": probability_changes[0],
-                "negative_change_percent": probability_changes[1],
             }
         )
 

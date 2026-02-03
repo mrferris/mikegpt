@@ -50,7 +50,7 @@ let initialK = 5; // Policy boundary (user's k value)
 let totalK = 5; // Total tokens currently visible
 let initialN = 4; // Initial N value (static)
 let samplingMethod = 'topk'; // 'topk' or 'topp'
-let rlMethod = 'dpo'; // 'dpo' or 'grpo'
+let rlMethod = 'pair'; // 'pair' or 'group'
 
 // Loading state tracking
 let loadedDepths = new Set(); // Track which depth layers we've already loaded

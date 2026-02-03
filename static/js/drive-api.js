@@ -147,7 +147,7 @@ function startGame() {
     console.log(`[startGame] initialK=${initialK}, totalK=${totalK}, treeData.children.length=${treeData.children.length}`);
 
     // Set initial RL method state
-    setRLMethod('dpo');
+    setRLMethod('pair');
 
     // Render immediately
     renderLevels();
