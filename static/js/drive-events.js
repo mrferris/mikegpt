@@ -20,8 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     timestamp: new Date(step.timestamp).getTime(),
                     positiveChange: step.probability_changes?.[0] ?? 0,
                     negativeChange: step.probability_changes?.[step.probability_changes?.length - 1] ?? 0,
-                    positivePaths: step.responses?.slice(0, Math.ceil(step.responses.length / 2)) || [],
-                    negativePaths: step.responses?.slice(Math.ceil(step.responses.length / 2)) || [],
+                    // Use response_texts (decoded text) if available, fall back to responses (token IDs) for old entries
+                    positivePaths: (step.response_texts || step.responses)?.slice(0, Math.ceil((step.response_texts || step.responses)?.length / 2)) || [],
+                    negativePaths: (step.response_texts || step.responses)?.slice(Math.ceil((step.response_texts || step.responses)?.length / 2)) || [],
                     type: step.type || 'pair',
                     allChanges: step.probability_changes
                 }));

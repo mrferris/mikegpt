@@ -382,12 +382,16 @@ def train():
         # Determine type based on group size
         train_type = "pair" if len(responses) == 2 else "group"
 
+        # Decode responses to text for display
+        response_texts = [model.tokenizer.decode(r) for r in responses]
+
         # Save to persistent training history
         save_training_step({
             "timestamp": datetime.now().isoformat(),
             "type": train_type,
             "prompt": prompt_text,
             "responses": responses,
+            "response_texts": response_texts,
             "rewards": rewards,
             "probability_changes": probability_changes,
         })
