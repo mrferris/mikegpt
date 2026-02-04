@@ -1109,6 +1109,28 @@ body.light-mode .rl-method-btn.active {
     color: #f00;
 }
 
+.history-metrics {
+    display: flex;
+    gap: 15px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metric-item {
+    font-size: 10px;
+    color: #888;
+    font-family: monospace;
+}
+
+body.light-mode .history-metrics {
+    border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+body.light-mode .metric-item {
+    color: #666;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }

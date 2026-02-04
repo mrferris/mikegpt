@@ -285,7 +285,9 @@ function addGrpoToHistory(result) {
         negativeChange: result.probability_changes[7] || 0,
         positivePaths: rankedPaths.slice(0, 4),
         negativePaths: rankedPaths.slice(4, 8),
-        allChanges: result.probability_changes
+        allChanges: result.probability_changes,
+        l2Diff: result.l2_diff,
+        klDivergence: result.kl_divergence
     });
 
     // Update the history display

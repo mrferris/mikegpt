@@ -371,13 +371,17 @@ def train():
         # Tokenize the prompt
         prompt_tokens = model.tokenizer.encode(prompt_text)
 
-        # Call unified training step
-        probability_changes = model.do_training_step(
+        # Call unified training step (returns dict with metrics)
+        training_result = model.do_training_step(
             prompt=prompt_tokens,
             responses=responses,
             rewards=rewards,
             num_steps=1
         )
+
+        probability_changes = training_result["probability_changes"]
+        l2_diff = training_result["l2_diff"]
+        kl_divergence = training_result["kl_divergence"]
 
         # Determine type based on group size
         train_type = "pair" if len(responses) == 2 else "group"
@@ -394,6 +398,8 @@ def train():
             "response_texts": response_texts,
             "rewards": rewards,
             "probability_changes": probability_changes,
+            "l2_diff": l2_diff,
+            "kl_divergence": kl_divergence,
         })
 
         return jsonify(
@@ -401,6 +407,8 @@ def train():
                 "success": True,
                 "prompt_length": len(prompt_tokens),
                 "probability_changes": probability_changes,
+                "l2_diff": l2_diff,
+                "kl_divergence": kl_divergence,
             }
         )
 

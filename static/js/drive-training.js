@@ -121,6 +121,12 @@ function formatPercent(value) {
     return value.toFixed(2);
 }
 
+function formatMetric(value) {
+    if (value === undefined || value === null) return 'N/A';
+    if (Math.abs(value) < 0.001) return value.toExponential(2);
+    return value.toFixed(4);
+}
+
 function updateTrainingHistory() {
     const historyHeader = document.getElementById('history-header');
     const historyList = document.getElementById('history-list');
@@ -162,6 +168,10 @@ function updateTrainingHistory() {
             <div class="history-changes">
                 <div class="prob-change prob-positive">+${formatPercent(item.positiveChange)}%</div>
                 <div class="prob-change prob-negative">${formatPercent(item.negativeChange)}%</div>
+            </div>
+            <div class="history-metrics">
+                <div class="metric-item">L2: ${formatMetric(item.l2Diff)}</div>
+                <div class="metric-item">KL: ${formatMetric(item.klDivergence)}</div>
             </div>
         `;
         historyList.appendChild(div);
@@ -212,7 +222,9 @@ async function exportSelections() {
             positiveChange: result.probability_changes[0],
             negativeChange: result.probability_changes[1],
             positivePaths: positivePaths,
-            negativePaths: negativePaths
+            negativePaths: negativePaths,
+            l2Diff: result.l2_diff,
+            klDivergence: result.kl_divergence
         });
 
         // Update displays

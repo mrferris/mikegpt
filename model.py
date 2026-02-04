@@ -504,14 +504,17 @@ class Model:
         responses: list[list[int]],
         rewards: list[float],
         num_steps: int = 1
-    ) -> list[float]:
+    ) -> dict:
         """
         Unified GRPO-based training for any group size.
 
         For pair mode: responses=[positive, negative], rewards=[1.0, -1.0]
         For group mode: responses=[resp1..resp8], rewards=[8,7,6,5,4,3,2,1] (from ranks)
 
-        Returns list of probability changes (as percentages) for each response.
+        Returns dict with:
+        - probability_changes: list[float] - percentage change per response
+        - l2_diff: float - L2 norm of parameter changes
+        - kl_divergence: float - mean KL(before || after) across response positions
         """
         from torch.nn.utils.rnn import pad_sequence
         from lm.training.reinforcement.log_probs import calculate_model_log_probs
@@ -528,6 +531,18 @@ class Model:
             padding_value=0,
         )
 
+        # Build full sequences (prompt + response) for KL divergence calculation
+        full_sequences = [prompt + r for r in responses]
+        max_len = max(len(s) for s in full_sequences)
+        padded = [s + [0] * (max_len - len(s)) for s in full_sequences]
+        full_tensor = torch.tensor(padded, dtype=torch.long, device=self.device)
+
+        # Snapshot parameters before training (for L2 diff)
+        param_snapshot = {
+            name: param.detach().clone()
+            for name, param in self.model.named_parameters()
+        }
+
         # Calculate log probs before training
         # Note: calculate_model_log_probs returns (per_token_log_probs, mask) tuple
         with torch.no_grad():
@@ -541,6 +556,11 @@ class Model:
             # Sum per-token log probs to get sequence-level
             before_log_probs = before_per_token_log_probs.sum(dim=-1)
 
+            # Get full logits for KL divergence (before training)
+            before_logits = self.model(full_tensor)  # [batch, seq_len, vocab_size]
+            before_log_probs_full = F.log_softmax(before_logits, dim=-1)
+            before_probs_full = torch.exp(before_log_probs_full)
+
         # Execute the GRPO training step
         # Note: model parameter removed, uses self.model internally
         self.trainable_model.do_grpo_step(
@@ -549,6 +569,13 @@ class Model:
             rewards=rewards,
             num_steps=num_steps
         )
+
+        # Calculate L2 diff of parameter changes
+        l2_diff = 0.0
+        for name, param in self.model.named_parameters():
+            diff = param - param_snapshot[name]
+            l2_diff += (diff ** 2).sum().item()
+        l2_diff = l2_diff ** 0.5
 
         # Calculate log probs after training
         with torch.no_grad():
@@ -562,9 +589,25 @@ class Model:
             # Sum per-token log probs to get sequence-level
             after_log_probs = after_per_token_log_probs.sum(dim=-1)
 
+            # Get full logits for KL divergence (after training)
+            after_logits = self.model(full_tensor)
+            after_log_probs_full = F.log_softmax(after_logits, dim=-1)
+
+            # KL(before || after) = sum_x P_before(x) * (log P_before(x) - log P_after(x))
+            # Compute per position, then average over response positions only
+            kl_per_position = (before_probs_full * (before_log_probs_full - after_log_probs_full)).sum(dim=-1)
+
+            # Only include response positions (after prompt), average across all
+            prompt_len = len(prompt)
+            kl_divergence = kl_per_position[:, prompt_len:].mean().item()
+
         # Convert to probability changes (as percentages)
         before_probs = torch.exp(before_log_probs) * 100
         after_probs = torch.exp(after_log_probs) * 100
         prob_changes = (after_probs - before_probs).tolist()
 
-        return prob_changes
+        return {
+            "probability_changes": prob_changes,
+            "l2_diff": l2_diff,
+            "kl_divergence": kl_divergence,
+        }
