@@ -529,18 +529,21 @@ class Model:
         )
 
         # Calculate log probs before training
+        # Note: calculate_model_log_probs returns (per_token_log_probs, mask) tuple
         with torch.no_grad():
-            before_log_probs = calculate_model_log_probs(
+            before_per_token_log_probs, _ = calculate_model_log_probs(
                 self.model,
                 prompt_tensor,
                 prompt_lengths,
                 response_tensor,
                 response_lengths,
             )
+            # Sum per-token log probs to get sequence-level
+            before_log_probs = before_per_token_log_probs.sum(dim=-1)
 
         # Execute the GRPO training step
+        # Note: model parameter removed, uses self.model internally
         self.trainable_model.do_grpo_step(
-            model=self.model,
             prompt=prompt,
             responses=responses,
             rewards=rewards,
@@ -549,13 +552,15 @@ class Model:
 
         # Calculate log probs after training
         with torch.no_grad():
-            after_log_probs = calculate_model_log_probs(
+            after_per_token_log_probs, _ = calculate_model_log_probs(
                 self.model,
                 prompt_tensor,
                 prompt_lengths,
                 response_tensor,
                 response_lengths,
             )
+            # Sum per-token log probs to get sequence-level
+            after_log_probs = after_per_token_log_probs.sum(dim=-1)
 
         # Convert to probability changes (as percentages)
         before_probs = torch.exp(before_log_probs) * 100
