@@ -315,9 +315,13 @@ def grpo_generate():
     def generate_stream():
         try:
             responses = []
+            seen_texts = set()
             full_prompt = f"<|ConversationStart|><|Them|>{prompt_text}<|Me|>"
+            max_attempts = 24  # Prevent infinite loops if model is too deterministic
 
-            for i in range(8):
+            attempts = 0
+            while len(responses) < 8 and attempts < max_attempts:
+                attempts += 1
                 model.prime(full_prompt)
                 current_response = ""
                 response_tokens = []
@@ -347,13 +351,27 @@ def grpo_generate():
                         break
 
                     current_response += token
-                    yield f"data: {json.dumps({'index': i, 'token': token, 'done': False})}\n\n"
+
+                # Check for duplicates before adding
+                response_text = current_response.strip()
+                if response_text in seen_texts:
+                    # Duplicate, skip and try again
+                    continue
+
+                # Unique response - add it and stream to frontend
+                seen_texts.add(response_text)
+                i = len(responses)
+
+                # Stream tokens for this response (decode each token individually)
+                for tid in response_tokens:
+                    token_str = model.tokenizer.decode([tid])
+                    yield f"data: {json.dumps({'index': i, 'token': token_str, 'done': False})}\n\n"
 
                 # Send completion for this response
                 responses.append(
-                    {"text": current_response.strip(), "tokens": response_tokens}
+                    {"text": response_text, "tokens": response_tokens}
                 )
-                yield f"data: {json.dumps({'index': i, 'done': True, 'full_response': current_response.strip(), 'tokens': response_tokens})}\n\n"
+                yield f"data: {json.dumps({'index': i, 'done': True, 'full_response': response_text, 'tokens': response_tokens})}\n\n"
 
             # Send final message with all responses
             yield f"data: {json.dumps({'all_done': True, 'responses': responses})}\n\n"
