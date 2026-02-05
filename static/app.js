@@ -382,6 +382,17 @@ if (mikeStartsFirst) {
     autoStartConversation();
 }
 
+// Initialize: fetch checkpoint count for badge
+fetch('/api/checkpoints')
+    .then(res => res.json())
+    .then(data => {
+        if (data.checkpoints) {
+            updateBadgeCount(data.checkpoints.length);
+            currentCheckpoint = data.current;
+        }
+    })
+    .catch(err => console.error('Failed to fetch checkpoints:', err));
+
 // Get first user message from conversation
 function getFirstUserMessage() {
     const messages = document.getElementById('messages');
@@ -564,5 +575,134 @@ document.addEventListener('keydown', (e) => {
     // Press 'Escape' to exit light mode and return to MikeGPT
     if (e.key === 'Escape') {
         animateBackToMikeGPT();
+    }
+});
+
+// ========== Checkpoint Selection ==========
+
+let currentCheckpoint = null;
+
+// Load checkpoints and populate the list
+async function loadCheckpoints() {
+    try {
+        const response = await fetch('/api/checkpoints');
+        const data = await response.json();
+        const list = document.getElementById('checkpoint-list');
+
+        currentCheckpoint = data.current;
+
+        if (!data.checkpoints || data.checkpoints.length === 0) {
+            list.innerHTML = '<div class="checkpoint-empty">No checkpoints found.<br>Add .pt files to mikegpt/checkpoints/</div>';
+            updateBadgeCount(0);
+            return;
+        }
+
+        updateBadgeCount(data.checkpoints.length);
+
+        list.innerHTML = data.checkpoints.map(cp => {
+            const date = new Date(cp.modified * 1000);
+            const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const isCurrent = cp.path === currentCheckpoint;
+
+            return `
+                <div class="checkpoint-item ${isCurrent ? 'current' : ''}" data-path="${cp.path}">
+                    <div class="checkpoint-item-icon">🧠</div>
+                    <div class="checkpoint-item-info">
+                        <div class="checkpoint-item-name">${cp.name}</div>
+                        <div class="checkpoint-item-date">${dateStr}</div>
+                    </div>
+                    <div class="checkpoint-item-arrow">›</div>
+                </div>
+            `;
+        }).join('');
+
+        // Add click handlers
+        list.querySelectorAll('.checkpoint-item').forEach(item => {
+            item.addEventListener('click', () => selectCheckpoint(item.dataset.path));
+        });
+
+    } catch (err) {
+        console.error('Failed to load checkpoints:', err);
+        document.getElementById('checkpoint-list').innerHTML =
+            '<div class="checkpoint-empty">Error loading checkpoints</div>';
+    }
+}
+
+// Select a checkpoint and start fresh conversation
+async function selectCheckpoint(checkpointPath) {
+    // If clicking the current checkpoint, just go back without reloading
+    if (checkpointPath === currentCheckpoint) {
+        hideCheckpointScreen();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/switch-model', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({checkpoint_path: checkpointPath})
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to switch model');
+        }
+
+        currentCheckpoint = checkpointPath;
+
+        // Clear conversation state
+        conversationHistory = '';
+        cycleHistory = '';
+        cycleTokenIds = [];
+        messageHistorySnapshots = [];
+        messageTokenIdSnapshots = [];
+        lastUserMessageElement = null;
+
+        // Clear messages UI
+        document.getElementById('messages').innerHTML = '';
+
+        // Hide checkpoint screen
+        hideCheckpointScreen();
+
+        // Restart conversation with new model
+        if (mikeStartsFirst) {
+            autoStartConversation();
+        }
+
+    } catch (err) {
+        console.error('Failed to switch model:', err);
+        alert('Failed to switch model: ' + err.message);
+    }
+}
+
+// Show checkpoint selection screen
+function showCheckpointScreen() {
+    loadCheckpoints();
+    document.getElementById('checkpoint-screen').classList.add('visible');
+    document.getElementById('chat-screen').style.display = 'none';
+    document.getElementById('header-title').textContent = 'Models';
+    document.querySelector('.phone-container').classList.add('checkpoint-visible');
+}
+
+// Hide checkpoint selection screen
+function hideCheckpointScreen() {
+    document.getElementById('checkpoint-screen').classList.remove('visible');
+    document.getElementById('chat-screen').style.display = 'flex';
+    document.getElementById('header-title').textContent = 'MikeGPT';
+    document.querySelector('.phone-container').classList.remove('checkpoint-visible');
+}
+
+// Update badge count
+function updateBadgeCount(count) {
+    document.getElementById('back-badge').textContent = count;
+}
+
+// Event listener for checkpoint screen
+document.getElementById('back-button').addEventListener('click', () => {
+    const checkpointScreen = document.getElementById('checkpoint-screen');
+    if (checkpointScreen.classList.contains('visible')) {
+        // Already on checkpoint screen, clicking current model goes back
+        // This is handled by selectCheckpoint when clicking current
+    } else {
+        showCheckpointScreen();
     }
 });

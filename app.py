@@ -139,6 +139,30 @@ def get_training_history():
     return jsonify(load_training_history())
 
 
+@app.route("/api/checkpoints", methods=["GET"])
+def list_checkpoints():
+    """List available model checkpoints."""
+    from model import Model
+    checkpoints = Model.list_checkpoints()
+    # Add current checkpoint info
+    current = model.current_checkpoint if model else None
+    return jsonify({"checkpoints": checkpoints, "current": current})
+
+
+@app.route("/api/switch-model", methods=["POST"])
+def switch_model():
+    """Hot-swap to a different checkpoint."""
+    from pathlib import Path
+    data = request.json
+    checkpoint_path = data.get("checkpoint_path")
+
+    if not checkpoint_path or not Path(checkpoint_path).exists():
+        return jsonify({"error": "Invalid checkpoint path"}), 400
+
+    model.reload_checkpoint(checkpoint_path)
+    return jsonify({"success": True, "loaded": checkpoint_path})
+
+
 @app.route("/api/beam-tree", methods=["POST"])
 def beam_tree():
     """
@@ -390,6 +414,9 @@ def train():
         response_texts = [model.tokenizer.decode(r) for r in responses]
 
         # Save to persistent training history
+        history = load_training_history()
+        step_num = len(history["steps"]) + 1
+
         save_training_step({
             "timestamp": datetime.now().isoformat(),
             "type": train_type,
@@ -402,6 +429,10 @@ def train():
             "kl_divergence": kl_divergence,
         })
 
+        # Auto-save checkpoint after training
+        checkpoint_name = f"step_{step_num}"
+        checkpoint_path = model.save_checkpoint(checkpoint_name)
+
         return jsonify(
             {
                 "success": True,
@@ -409,6 +440,7 @@ def train():
                 "probability_changes": probability_changes,
                 "l2_diff": l2_diff,
                 "kl_divergence": kl_divergence,
+                "checkpoint_saved": checkpoint_name,
             }
         )
 

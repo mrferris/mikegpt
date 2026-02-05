@@ -82,6 +82,55 @@ class Model:
         # Key: path_key string, Value: (sorted_probs, sorted_indices) CPU tensors
         self._probs_cache = {}
         self._cache_prompt = None
+        self.current_checkpoint = checkpoint_path
+
+    def save_checkpoint(self, name: str = None) -> str:
+        """Save current model state and optimizer state. Returns the checkpoint path."""
+        from datetime import datetime
+
+        checkpoints_dir = Path(__file__).parent / "checkpoints"
+        checkpoints_dir.mkdir(exist_ok=True)
+
+        if name is None:
+            name = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        checkpoint_path = checkpoints_dir / f"{name}.pt"
+        torch.save({
+            "model": self.model.state_dict(),
+            "optimizer": self.trainable_model.grpo_optimizer.state_dict(),
+        }, checkpoint_path)
+        self.current_checkpoint = str(checkpoint_path)
+        return str(checkpoint_path)
+
+    def reload_checkpoint(self, checkpoint_path: str):
+        """Hot-swap model weights and optimizer state from a different checkpoint."""
+        state = torch.load(checkpoint_path, weights_only=False)
+        self.model.load_state_dict(state["model"])
+        # Reinitialize trainable model with new weights
+        self.trainable_model = TrainableModel(model=self.model)
+        # Restore optimizer state if available
+        if "optimizer" in state:
+            self.trainable_model.grpo_optimizer.load_state_dict(state["optimizer"])
+        # Clear caches
+        self._probs_cache = {}
+        self._cache_prompt = None
+        self.current_checkpoint = checkpoint_path
+
+    @staticmethod
+    def list_checkpoints() -> list[dict]:
+        """List available checkpoints with metadata."""
+        checkpoints_dir = Path(__file__).parent / "checkpoints"
+        if not checkpoints_dir.exists():
+            return []
+
+        checkpoints = []
+        for f in checkpoints_dir.glob("*.pt"):
+            checkpoints.append({
+                "name": f.stem,
+                "path": str(f),
+                "modified": f.stat().st_mtime,
+            })
+        return sorted(checkpoints, key=lambda x: x["modified"], reverse=True)
 
     def prime(self, prompt: str):
         """Tokenize prompt once and store on device."""

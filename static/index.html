@@ -8,43 +8,55 @@
 </head>
 <body>
     <div class="phone-container">
+        <!-- Shared Header -->
         <div class="status-bar">
             <span class="time" id="time"></span>
         </div>
 
         <div class="chat-header">
-            <div class="back-button">‹</div>
+            <div class="back-button" id="back-button">
+                <span class="back-arrow">‹</span>
+                <span class="back-text" id="back-text">Models</span>
+                <span class="back-badge" id="back-badge">1</span>
+            </div>
             <div class="contact-info">
-                <div class="contact-name">MikeGPT</div>
-            </div>
-            <div class="header-icons">
-                <span class="icon">⓿</span>
+                <div class="contact-name" id="header-title">MikeGPT</div>
             </div>
         </div>
 
-        <div class="messages-container" id="messages">
-            <!-- Messages will be inserted here -->
+        <!-- Checkpoint Selection Screen -->
+        <div class="checkpoint-screen" id="checkpoint-screen">
+            <div class="checkpoint-list" id="checkpoint-list">
+                <!-- Checkpoints will be inserted here -->
+            </div>
         </div>
 
-        <div class="input-container">
-            <div class="input-wrapper">
-                <button class="input-icon">+</button>
-                <input
-                    type="text"
-                    id="message-input"
-                    placeholder="iMessage"
-                    autocomplete="off"
-                >
-                <button class="send-button" id="send-button">
-                    <svg width="22" height="22" viewBox="0 0 22 22">
-                        <path d="M2 10.5 L20 10.5 M20 10.5 L13 3.5 M20 10.5 L13 17.5"
-                              stroke="white"
-                              stroke-width="2"
-                              fill="none"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"/>
-                    </svg>
-                </button>
+        <!-- Main Chat Screen -->
+        <div class="chat-screen" id="chat-screen">
+            <div class="messages-container" id="messages">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <button class="input-icon">+</button>
+                    <input
+                        type="text"
+                        id="message-input"
+                        placeholder="iMessage"
+                        autocomplete="off"
+                    >
+                    <button class="send-button" id="send-button">
+                        <svg width="22" height="22" viewBox="0 0 22 22">
+                            <path d="M2 10.5 L20 10.5 M20 10.5 L13 3.5 M20 10.5 L13 17.5"
+                                  stroke="white"
+                                  stroke-width="2"
+                                  fill="none"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
