@@ -1,9 +1,17 @@
+import os
 from pathlib import Path
 from lm.model.model import TransformerLM, TrainableModel
 from lm.training.utils.checkpointing import load_checkpoint
 from lm.tokenization.bpe import Tokenizer
 import torch
 import torch.nn.functional as F
+
+
+def _checkpoints_dir() -> Path:
+    env = os.environ.get("CHECKPOINTS_DIR")
+    if env:
+        return Path(env)
+    return Path(__file__).parent / "checkpoints"
 
 
 class Model:
@@ -88,7 +96,7 @@ class Model:
         """Save current model state and optimizer state. Returns the checkpoint path."""
         from datetime import datetime
 
-        checkpoints_dir = Path(__file__).parent / "checkpoints"
+        checkpoints_dir = _checkpoints_dir()
         checkpoints_dir.mkdir(exist_ok=True)
 
         if name is None:
@@ -122,7 +130,7 @@ class Model:
     @staticmethod
     def list_checkpoints() -> list[dict]:
         """List available checkpoints with metadata."""
-        checkpoints_dir = Path(__file__).parent / "checkpoints"
+        checkpoints_dir = _checkpoints_dir()
         if not checkpoints_dir.exists():
             return []
 
