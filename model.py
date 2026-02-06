@@ -1,9 +1,4 @@
-import sys
 from pathlib import Path
-
-# Add sibling repo to Python path
-sys.path.append(str(Path(__file__).resolve().parents[1] / "artisinal-lm"))
-
 from lm.model.model import TransformerLM, TrainableModel
 from lm.training.utils.checkpointing import load_checkpoint
 from lm.tokenization.bpe import Tokenizer
@@ -13,7 +8,7 @@ import torch.nn.functional as F
 
 class Model:
     def __init__(self, checkpoint_path):
-        self.device = "mps"
+        self.device = "cpu"
         self.context_length = 256
         d_model = 256
         vocab_size = 8192
@@ -37,7 +32,12 @@ class Model:
             .eval()
         )
 
-        load_checkpoint(checkpoint_path, self.model, None)
+        load_checkpoint(
+            checkpoint_path,
+            self.model,
+            None,
+            self.device,
+        )
 
         self.trainable_model = TrainableModel(model=self.model)
 
