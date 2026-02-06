@@ -524,6 +524,17 @@ body.light-mode .page-separator-label {
     margin-top: 5px;
 }
 
+.token-id {
+    font-size: 10px;
+    color: #888;
+    font-family: monospace;
+    margin-top: 3px;
+}
+
+body.light-mode .token-id {
+    color: #999;
+}
+
 /* Multi-level depth view - curved road effect */
 .level-0 { z-index: 100; transform: translateZ(0px) translateY(-100px) scale(1); opacity: 1; }
 .level-1 { z-index: 90; transform: translateZ(-500px) translateY(0px) scale(0.82); opacity: 1; }

@@ -44,7 +44,7 @@ class Model:
         # Load vocab to extract emojis
         import json
 
-        with open("vocab/mikegpt_vocab_8192.json") as f:
+        with open(f"vocab/mikegpt_vocab_{vocab_size}.json") as f:
             vocab_json = json.load(f)
 
         # Extract emojis from vocab (tokens 10-282)
@@ -70,8 +70,8 @@ class Model:
         ] + emojis
 
         self.tokenizer = Tokenizer.from_files(
-            "vocab/mikegpt_vocab_8192.json",
-            "vocab/mikegpt_merges_8192.pkl",
+            f"vocab/mikegpt_vocab_{vocab_size}.json",
+            f"vocab/mikegpt_merges_{vocab_size}.pkl",
             special_tokens=special_tokens,
         )
 
@@ -95,10 +95,13 @@ class Model:
             name = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         checkpoint_path = checkpoints_dir / f"{name}.pt"
-        torch.save({
-            "model": self.model.state_dict(),
-            "optimizer": self.trainable_model.grpo_optimizer.state_dict(),
-        }, checkpoint_path)
+        torch.save(
+            {
+                "model": self.model.state_dict(),
+                "optimizer": self.trainable_model.grpo_optimizer.state_dict(),
+            },
+            checkpoint_path,
+        )
         self.current_checkpoint = str(checkpoint_path)
         return str(checkpoint_path)
 
@@ -125,11 +128,13 @@ class Model:
 
         checkpoints = []
         for f in checkpoints_dir.glob("*.pt"):
-            checkpoints.append({
-                "name": f.stem,
-                "path": str(f),
-                "modified": f.stat().st_mtime,
-            })
+            checkpoints.append(
+                {
+                    "name": f.stem,
+                    "path": str(f),
+                    "modified": f.stat().st_mtime,
+                }
+            )
         return sorted(checkpoints, key=lambda x: x["modified"], reverse=True)
 
     def prime(self, prompt: str):
@@ -163,6 +168,7 @@ class Model:
         with torch.no_grad():
             logits = self.model(self.current_tokens)
             last_logits = logits[0, -1] / temperature  # apply temperature
+            last_logits[0] = float("-inf")  # suppress <|endoftext|>
             probs = F.softmax(last_logits, dim=-1)
 
             if use_top_k:
@@ -222,6 +228,7 @@ class Model:
         with torch.no_grad():
             logits = self.model(tokens_tensor)
             last_logits = logits[0, -1] / temperature
+            last_logits[0] = float("-inf")  # suppress <|endoftext|>
             probs = F.softmax(last_logits, dim=-1)
 
             top_probs, top_idx = torch.topk(probs, k=k)
@@ -278,6 +285,7 @@ class Model:
             last_logits = (
                 logits.gather(1, gather_idx).squeeze(1) / temperature
             )  # [N, vocab_size]
+            last_logits[:, 0] = float("-inf")  # suppress <|endoftext|>
 
             probs = F.softmax(last_logits, dim=-1)  # [N, vocab_size]
             top_probs, top_idx = torch.topk(probs, k=k, dim=-1)  # [N, k] each
@@ -369,6 +377,7 @@ class Model:
             last_logits = (
                 logits.gather(1, gather_idx).squeeze(1) / temperature
             )  # [N, vocab_size]
+            last_logits[:, 0] = float("-inf")  # suppress <|endoftext|>
 
             probs = F.softmax(last_logits, dim=-1)
             sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
@@ -552,7 +561,7 @@ class Model:
         prompt: list[int],
         responses: list[list[int]],
         rewards: list[float],
-        num_steps: int = 1
+        num_steps: int = 1,
     ) -> dict:
         """
         Unified GRPO-based training for any group size.
@@ -571,7 +580,9 @@ class Model:
         group_size = len(responses)
 
         # Prepare tensors for log prob calculation
-        prompt_tensor = torch.tensor(prompt, dtype=torch.long, device=self.device).expand(group_size, -1)
+        prompt_tensor = torch.tensor(
+            prompt, dtype=torch.long, device=self.device
+        ).expand(group_size, -1)
         prompt_lengths = torch.tensor([len(prompt)] * group_size, device=self.device)
         response_lengths = torch.tensor([len(r) for r in responses], device=self.device)
         response_tensor = pad_sequence(
@@ -613,18 +624,15 @@ class Model:
         # Execute the GRPO training step
         # Note: model parameter removed, uses self.model internally
         self.trainable_model.do_grpo_step(
-            prompt=prompt,
-            responses=responses,
-            rewards=rewards,
-            num_steps=num_steps
+            prompt=prompt, responses=responses, rewards=rewards, num_steps=num_steps
         )
 
         # Calculate L2 diff of parameter changes
         l2_diff = 0.0
         for name, param in self.model.named_parameters():
             diff = param - param_snapshot[name]
-            l2_diff += (diff ** 2).sum().item()
-        l2_diff = l2_diff ** 0.5
+            l2_diff += (diff**2).sum().item()
+        l2_diff = l2_diff**0.5
 
         # Calculate log probs after training
         with torch.no_grad():
@@ -644,7 +652,9 @@ class Model:
 
             # KL(before || after) = sum_x P_before(x) * (log P_before(x) - log P_after(x))
             # Compute per position, then average over response positions only
-            kl_per_position = (before_probs_full * (before_log_probs_full - after_log_probs_full)).sum(dim=-1)
+            kl_per_position = (
+                before_probs_full * (before_log_probs_full - after_log_probs_full)
+            ).sum(dim=-1)
 
             # Only include response positions (after prompt), average across all
             prompt_len = len(prompt)
