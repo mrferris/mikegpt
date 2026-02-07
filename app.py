@@ -17,6 +17,7 @@ import json
 import yaml
 from pathlib import Path
 from datetime import datetime
+import resource
 
 app = Flask(__name__, static_folder="static")
 
@@ -39,6 +40,7 @@ def save_training_step(step_data: dict):
     TRAINING_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(TRAINING_HISTORY_PATH, "w") as f:
         yaml.dump(history, f, default_flow_style=False)
+
 
 # Initialize model
 model = None
@@ -104,7 +106,9 @@ def generate():
                         new_history += f"<|Me|>{response}"
 
                 # Send this response immediately with token IDs
-                print(f"[generate] Sending response='{response}' with token_ids={token_ids}")
+                print(
+                    f"[generate] Sending response='{response}' with token_ids={token_ids}"
+                )
                 yield f"data: {json.dumps({'response': response, 'token_ids': token_ids})}\n\n"
 
             # Save final history
@@ -143,6 +147,7 @@ def get_training_history():
 def list_checkpoints():
     """List available model checkpoints."""
     from model import Model
+
     checkpoints = Model.list_checkpoints()
     # Add current checkpoint info
     current = model.current_checkpoint if model else None
@@ -153,6 +158,7 @@ def list_checkpoints():
 def switch_model():
     """Hot-swap to a different checkpoint."""
     from pathlib import Path
+
     data = request.json
     checkpoint_path = data.get("checkpoint_path")
 
@@ -193,15 +199,8 @@ def beam_tree():
         )
 
     try:
-        print("\n=== BEAM TREE REQUEST ===")
-        print(f"Prompt: '{prompt}'")
-        print(f"k={k}, n={n}")
         raw = data.get("raw", False)
         tree = model.build_beam_tree(prompt, k=k, n=n, raw=raw)
-        print(
-            f"Top {k} tokens: {[(c['token_id'], c['token_str'], c['probability']) for c in tree['children'][:k]]}"
-        )
-        print("=========================\n")
         return jsonify(tree)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -277,6 +276,14 @@ def expand_depth():
                     }
                 )
             result[path_key] = children
+
+        # Peak RSS in MB (macOS ru_maxrss is bytes, Linux is KB)
+        import sys
+        peak_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        peak_mb = peak_kb / 1024 if sys.platform == 'linux' else peak_kb / (1024 * 1024)
+        cache_entries = len(model._probs_cache)
+        cache_mb = sum(t.nelement() * t.element_size() for pair in model._probs_cache.values() for t in pair) / (1024 * 1024)
+        print(f"[memory] Peak RSS: {peak_mb:.1f} MB | probs_cache: {cache_entries} entries, {cache_mb:.1f} MB")
 
         return jsonify({"children_map": result})
     except Exception as e:
@@ -368,9 +375,7 @@ def grpo_generate():
                     yield f"data: {json.dumps({'index': i, 'token': token_str, 'done': False})}\n\n"
 
                 # Send completion for this response
-                responses.append(
-                    {"text": response_text, "tokens": response_tokens}
-                )
+                responses.append({"text": response_text, "tokens": response_tokens})
                 yield f"data: {json.dumps({'index': i, 'done': True, 'full_response': response_text, 'tokens': response_tokens})}\n\n"
 
             # Send final message with all responses
@@ -415,10 +420,7 @@ def train():
 
         # Call unified training step (returns dict with metrics)
         training_result = model.do_training_step(
-            prompt=prompt_tokens,
-            responses=responses,
-            rewards=rewards,
-            num_steps=1
+            prompt=prompt_tokens, responses=responses, rewards=rewards, num_steps=1
         )
 
         probability_changes = training_result["probability_changes"]
@@ -435,17 +437,19 @@ def train():
         history = load_training_history()
         step_num = len(history["steps"]) + 1
 
-        save_training_step({
-            "timestamp": datetime.now().isoformat(),
-            "type": train_type,
-            "prompt": prompt_text,
-            "responses": responses,
-            "response_texts": response_texts,
-            "rewards": rewards,
-            "probability_changes": probability_changes,
-            "l2_diff": l2_diff,
-            "kl_divergence": kl_divergence,
-        })
+        save_training_step(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "type": train_type,
+                "prompt": prompt_text,
+                "responses": responses,
+                "response_texts": response_texts,
+                "rewards": rewards,
+                "probability_changes": probability_changes,
+                "l2_diff": l2_diff,
+                "kl_divergence": kl_divergence,
+            }
+        )
 
         # Auto-save checkpoint after training
         checkpoint_name = f"step_{step_num}"
@@ -484,16 +488,21 @@ def serve_static(path):
 if __name__ == "__main__":
     arguments = argparse.ArgumentParser(description="Run MikeGPT")
 
+    default_checkpoint = os.path.join(
+        os.environ.get("CHECKPOINTS_DIR", "checkpoints"),
+        "pretrained.pt",
+    )
     arguments.add_argument(
         "--checkpoint",
         type=str,
-        required=True,
-        help="File from which to load model checkpoint",
+        default=default_checkpoint,
+        help="File from which to load model checkpoint (default: $CHECKPOINTS_DIR/pretrained.pt)",
     )
     args = arguments.parse_args()
+
 
     model = Model(checkpoint_path=args.checkpoint)
 
     # Create static folder if it doesn't exist
     os.makedirs("static", exist_ok=True)
-    app.run(debug=True, port=5002, host="127.0.0.1")
+    app.run(debug=False, port=5002, host="0.0.0.0")

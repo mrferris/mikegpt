@@ -92,6 +92,13 @@ class Model:
         self._cache_prompt = None
         self.current_checkpoint = checkpoint_path
 
+        # Prompt-level KV cache: computed once per prompt, reused for all tree expansions
+        self._prompt_kv_cache = None   # opaque cache from model.encode_kv()
+        self._prompt_kv_tokens = None  # token list used to build the cache
+        self._prompt_kv_logits = None  # logits from encode_kv (for primed logits)
+        self._gen_kv_cache = None      # running KV cache for incremental chat decode
+        self._primed_logits = None     # stored logits from prime(), used by first next_token()
+
     def save_checkpoint(self, name: str = None) -> str:
         """Save current model state and optimizer state. Returns the checkpoint path."""
         from datetime import datetime
@@ -125,6 +132,7 @@ class Model:
         # Clear caches
         self._probs_cache = {}
         self._cache_prompt = None
+        self._invalidate_kv()
         self.current_checkpoint = checkpoint_path
 
     @staticmethod
@@ -145,6 +153,24 @@ class Model:
             )
         return sorted(checkpoints, key=lambda x: x["modified"], reverse=True)
 
+    def _ensure_prompt_kv(self, tokens: list[int]):
+        """Compute prompt KV cache if tokens changed."""
+        if self._prompt_kv_tokens == tokens and self._prompt_kv_cache is not None:
+            return
+        prompt_tensor = torch.tensor([tokens], device=self.device, dtype=torch.long)
+        logits, kv = self.model.encode_kv(prompt_tensor)
+        self._prompt_kv_cache = kv
+        self._prompt_kv_logits = logits
+        self._prompt_kv_tokens = list(tokens)
+
+    def _invalidate_kv(self):
+        """Clear all KV caches (after training, checkpoint switch, etc.)."""
+        self._prompt_kv_cache = None
+        self._prompt_kv_tokens = None
+        self._prompt_kv_logits = None
+        self._gen_kv_cache = None
+        self._primed_logits = None
+
     def prime(self, prompt: str):
         """Tokenize prompt once and store on device."""
         tokens = self.tokenizer.encode(prompt)
@@ -153,6 +179,12 @@ class Model:
         self.current_tokens = torch.tensor(
             [tokens], device=self.device, dtype=torch.long
         )
+        # Pre-compute KV cache for the prompt
+        self._ensure_prompt_kv(tokens)
+        # Use full prompt KV cache — no trim needed since we store logits
+        # for the first next_token() call, avoiding the redundant re-forward.
+        self._gen_kv_cache = self._prompt_kv_cache
+        self._primed_logits = self._prompt_kv_logits[0, -1]
 
     def next_token(
         self,
@@ -163,6 +195,8 @@ class Model:
     ) -> str:
         """
         Fast next-token generation with temperature and top-p or top-k sampling.
+        Uses incremental KV-cached decoding: only the last token is forwarded
+        through the model, reusing cached K/V from all prior tokens.
 
         Args:
             temperature: Temperature for scaling logits (higher = more random)
@@ -174,8 +208,22 @@ class Model:
             raise RuntimeError("Must call .prime(prompt) before .next_token()")
 
         with torch.no_grad():
-            logits = self.model(self.current_tokens)
-            last_logits = logits[0, -1] / temperature  # apply temperature
+            if self._primed_logits is not None:
+                # Use stored logits from prime() — avoids re-forwarding the last prompt token
+                last_logits = self._primed_logits / temperature
+                self._primed_logits = None
+            elif self._gen_kv_cache is not None and self.current_tokens.size(1) <= self.context_length:
+                # Incremental decode: forward only the last token with the running KV cache
+                last_token = self.current_tokens[:, -1:]
+                logits, self._gen_kv_cache = self.model.forward_incremental(
+                    last_token, self._gen_kv_cache
+                )
+                last_logits = logits[0, -1] / temperature
+            else:
+                # Fallback: full forward (context overflow or no cache)
+                logits = self.model(self.current_tokens)
+                last_logits = logits[0, -1] / temperature
+
             last_logits[0] = float("-inf")  # suppress <|endoftext|>
             probs = F.softmax(last_logits, dim=-1)
 
@@ -216,6 +264,10 @@ class Model:
             self.current_tokens = torch.cat(
                 [self.current_tokens[:, 1:], new_token], dim=1
             )
+            # Rebuild KV cache from truncated sequence (minus last token
+            # for the next_token() pattern) to restore incremental decoding
+            with torch.no_grad():
+                _, self._gen_kv_cache = self.model.encode_kv(self.current_tokens[:, :-1])
         else:
             self.current_tokens = torch.cat([self.current_tokens, new_token], dim=1)
 
@@ -333,6 +385,10 @@ class Model:
         distribution for each node. Subsequent requests for the same node
         (even with a larger k) are served from cache with zero GPU work.
 
+        Uses prompt-level KV caching: the prompt's K/V tensors are computed
+        once and reused for all tree expansions, so only the suffix tokens
+        (path after the prompt) go through the model.
+
         Args:
             sequences: List of token lists (potentially different lengths)
             path_keys: List of cache key strings, one per sequence
@@ -346,10 +402,11 @@ class Model:
         if not sequences:
             return []
 
-        # Invalidate cache if prompt changed
+        # Invalidate caches if prompt changed
         if self._cache_prompt != prompt:
             self._probs_cache.clear()
             self._cache_prompt = prompt
+            self._invalidate_kv()
 
         # Separate cached vs uncached
         all_results = [None] * len(sequences)
@@ -364,36 +421,83 @@ class Model:
         if not uncached:
             return all_results
 
-        # Batched forward pass for uncached sequences only
         uncached_indices, uncached_seqs = zip(*uncached)
         uncached_seqs = list(uncached_seqs)
 
-        lengths = [len(seq) for seq in uncached_seqs]
-        max_len = max(lengths)
-
-        padded = [seq + [0] * (max_len - len(seq)) for seq in uncached_seqs]
-        batch_tensor = torch.tensor(padded, device=self.device, dtype=torch.long)
-
-        with torch.no_grad():
-            logits = self.model(batch_tensor)  # [N, max_len, vocab_size]
-
-            # Gather logits at each sequence's last real token position
-            last_indices = torch.tensor(
-                [l - 1 for l in lengths], device=self.device, dtype=torch.long
+        # Try to use prompt KV cache: all sequences must share the same prompt prefix
+        prompt_tokens = self._prompt_kv_tokens
+        can_use_kv = (
+            prompt_tokens is not None
+            and self._prompt_kv_cache is not None
+            and all(
+                len(seq) > len(prompt_tokens) and seq[: len(prompt_tokens)] == prompt_tokens
+                for seq in uncached_seqs
             )
-            gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
-            last_logits = (
-                logits.gather(1, gather_idx).squeeze(1) / temperature
-            )  # [N, vocab_size]
-            last_logits[:, 0] = float("-inf")  # suppress <|endoftext|>
+        )
 
-            probs = F.softmax(last_logits, dim=-1)
-            sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
+        if can_use_kv and len(uncached_seqs) > 0:
+            # Extract suffix tokens (everything after the prompt)
+            prompt_len = len(prompt_tokens)
+            suffixes = [seq[prompt_len:] for seq in uncached_seqs]
+            suffix_lengths = [len(s) for s in suffixes]
+            max_suffix_len = max(suffix_lengths)
 
-            sorted_probs_cpu = sorted_probs.cpu()
-            sorted_indices_cpu = sorted_indices.cpu()
+            padded_suffixes = [s + [0] * (max_suffix_len - len(s)) for s in suffixes]
+            suffix_tensor = torch.tensor(padded_suffixes, device=self.device, dtype=torch.long)
+
+            with torch.no_grad():
+                logits = self.model.forward_with_kv(suffix_tensor, self._prompt_kv_cache)
+
+                # Gather logits at each suffix's last real token position
+                last_indices = torch.tensor(
+                    [l - 1 for l in suffix_lengths], device=self.device, dtype=torch.long
+                )
+                gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
+                last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature
+                last_logits[:, 0] = float("-inf")
+
+                probs = F.softmax(last_logits, dim=-1)
+                sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
+                sorted_probs_cpu = sorted_probs.cpu()
+                sorted_indices_cpu = sorted_indices.cpu()
+        else:
+            # Fallback: full forward pass (prompt-only nodes or mismatched prefix)
+            lengths = [len(seq) for seq in uncached_seqs]
+            max_len = max(lengths)
+
+            # Build prompt KV for future suffix calls
+            if prompt_tokens is None:
+                prompt_tok = self.tokenizer.encode(prompt)
+                if len(prompt_tok) > self.context_length:
+                    prompt_tok = prompt_tok[-self.context_length:]
+                self._ensure_prompt_kv(prompt_tok)
+
+            padded = [seq + [0] * (max_len - len(seq)) for seq in uncached_seqs]
+            batch_tensor = torch.tensor(padded, device=self.device, dtype=torch.long)
+
+            with torch.no_grad():
+                logits = self.model(batch_tensor)  # [N, max_len, vocab_size]
+
+                last_indices = torch.tensor(
+                    [l - 1 for l in lengths], device=self.device, dtype=torch.long
+                )
+                gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
+                last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature
+                last_logits[:, 0] = float("-inf")
+
+                probs = F.softmax(last_logits, dim=-1)
+                sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
+                sorted_probs_cpu = sorted_probs.cpu()
+                sorted_indices_cpu = sorted_indices.cpu()
 
         # Cache full distributions and extract top-k
+        max_cache_entries = int(os.environ.get("PROBS_CACHE_MAX", 2000))
+        overflow = len(self._probs_cache) + len(uncached_indices) - max_cache_entries
+        if overflow > 0:
+            keys_to_evict = list(self._probs_cache.keys())[:overflow]
+            for k_evict in keys_to_evict:
+                del self._probs_cache[k_evict]
+
         for batch_i, orig_i in enumerate(uncached_indices):
             cached = (sorted_probs_cpu[batch_i], sorted_indices_cpu[batch_i])
             self._probs_cache[path_keys[orig_i]] = cached
@@ -428,7 +532,6 @@ class Model:
 
         # Build the tree recursively
         def build_node(tokens_tensor, depth, cumulative_prob):
-            print(f"Depth: {depth}")
             if depth >= n:
                 return None
 
@@ -672,6 +775,10 @@ class Model:
         before_probs = torch.exp(before_log_probs) * 100
         after_probs = torch.exp(after_log_probs) * 100
         prob_changes = (after_probs - before_probs).tolist()
+
+        # Invalidate caches since model weights changed
+        self._invalidate_kv()
+        self._probs_cache.clear()
 
         return {
             "probability_changes": prob_changes,
