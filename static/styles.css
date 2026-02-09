@@ -6,13 +6,73 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #F5F0EB;
+    min-height: 100vh;
+}
+
+/* ========== Page Layout ========== */
+
+.page-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.profile-panel {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px 60px 80px;
+}
+
+.profile-content {
+    max-width: 480px;
+}
+
+.profile-name {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 52px;
+    font-weight: 400;
+    color: #1a1a1a;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+}
+
+.profile-subtitle {
+    font-size: 18px;
+    font-weight: 400;
+    color: #6b6b6b;
+    margin-top: 12px;
+    letter-spacing: 0.3px;
+}
+
+.profile-divider {
+    width: 50px;
+    height: 1px;
+    background: #c4b8ab;
+    margin: 32px 0;
+}
+
+.profile-bio p {
+    font-size: 15px;
+    line-height: 1.75;
+    color: #4a4a4a;
+    margin-bottom: 16px;
+}
+
+.profile-bio p:last-child {
+    margin-bottom: 0;
+}
+
+.phone-panel {
+    flex: 1;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
     padding: 20px;
 }
+
+/* ========== Phone Container ========== */
 
 .phone-container {
     width: 100%;
@@ -24,30 +84,8 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
     position: relative;
-}
-
-/* iPad mode styling */
-.phone-container.ipad-mode {
-    border-radius: 20px;
-    border: 8px solid #1d1d1f;
-    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.4);
-    position: relative;
-    background: white;
-}
-
-.phone-container.ipad-mode::before {
-    content: '';
-    position: absolute;
-    top: -8px;
-    left: -8px;
-    right: -8px;
-    bottom: -8px;
-    border-radius: 20px;
-    background: linear-gradient(135deg, #4a4a4f 0%, #1d1d1f 25%, #000000 50%, #1d1d1f 75%, #4a4a4f 100%);
-    z-index: -1;
-    pointer-events: none;
 }
 
 /* Status Bar */

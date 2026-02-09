@@ -7,55 +7,74 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="phone-container">
-        <!-- Shared Header -->
-        <div class="status-bar">
-            <span class="time" id="time"></span>
-        </div>
-
-        <div class="chat-header">
-            <div class="back-button" id="back-button">
-                <span class="back-arrow">‹</span>
-                <span class="back-text" id="back-text">Models</span>
-                <span class="back-badge" id="back-badge">1</span>
-            </div>
-            <div class="contact-info">
-                <div class="contact-name" id="header-title">MikeGPT</div>
+    <div class="page-layout">
+        <!-- Left: Profile panel -->
+        <div class="profile-panel">
+            <div class="profile-content">
+                <h1 class="profile-name">MikeGPT</h1>
+                <p class="profile-subtitle">An Experiment in Language Modeling</p>
+                <div class="profile-divider"></div>
+                <div class="profile-bio">
+                    <p>I built a <a target="_blank" rel="noopener noreferrer" href="https://github.com/mrferris/artisinal-lm">transformer</a> from scratch and pre-trained it on ten years of my text messages (two million tokens), with a custom tokenizer that keeps every emoji intact, and masked loss so it only learns to talk like me. The resulting pre-trained model is...bad. Often hilarious, but bad.</p>
+                    <p>To fix that, I built MikeRL. It exposes the model's full token-space decision tree and allows for model observability and interactive, surgical preference alignment: picking good continuations, rejecting bad ones, training with GRPO, rolling back steps that make things worse.</p>
+                    <p>Click on a blue message to try it out!</p>
+                </div>
             </div>
         </div>
 
-        <!-- Checkpoint Selection Screen -->
-        <div class="checkpoint-screen" id="checkpoint-screen">
-            <div class="checkpoint-list" id="checkpoint-list">
-                <!-- Checkpoints will be inserted here -->
-            </div>
-        </div>
+        <!-- Right: Phone mockup -->
+        <div class="phone-panel">
+            <div class="phone-container">
+                <!-- Shared Header -->  
+                <div class="status-bar">
+                    <span class="time" id="time"></span>
+                </div>
 
-        <!-- Main Chat Screen -->
-        <div class="chat-screen" id="chat-screen">
-            <div class="messages-container" id="messages">
-                <!-- Messages will be inserted here -->
-            </div>
+                <div class="chat-header">
+                    <div class="back-button" id="back-button">
+                        <span class="back-arrow">&#8249;</span>
+                        <span class="back-text" id="back-text">Models</span>
+                        <span class="back-badge" id="back-badge">1</span>
+                    </div>
+                    <div class="contact-info">
+                        <div class="contact-name" id="header-title">MikeGPT</div>
+                    </div>
+                </div>
 
-            <div class="input-container">
-                <div class="input-wrapper">
-                    <button class="input-icon">+</button>
-                    <input
-                        type="text"
-                        id="message-input"
-                        placeholder="iMessage"
-                        autocomplete="off"
-                    >
-                    <button class="send-button" id="send-button">
-                        <svg width="22" height="22" viewBox="0 0 22 22">
-                            <path d="M2 10.5 L20 10.5 M20 10.5 L13 3.5 M20 10.5 L13 17.5"
-                                  stroke="white"
-                                  stroke-width="2"
-                                  fill="none"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"/>
-                        </svg>
-                    </button>
+                <!-- Checkpoint Selection Screen -->
+                <div class="checkpoint-screen" id="checkpoint-screen">
+                    <div class="checkpoint-list" id="checkpoint-list">
+                        <!-- Checkpoints will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Main Chat Screen -->
+                <div class="chat-screen" id="chat-screen">
+                    <div class="messages-container" id="messages">
+                        <!-- Messages will be inserted here -->
+                    </div>
+
+                    <div class="input-container">
+                        <div class="input-wrapper">
+                            <button class="input-icon">+</button>
+                            <input
+                                type="text"
+                                id="message-input"
+                                placeholder="iMessage"
+                                autocomplete="off"
+                            >
+                            <button class="send-button" id="send-button">
+                                <svg width="22" height="22" viewBox="0 0 22 22">
+                                    <path d="M2 10.5 L20 10.5 M20 10.5 L13 3.5 M20 10.5 L13 17.5"
+                                          stroke="white"
+                                          stroke-width="2"
+                                          fill="none"
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
