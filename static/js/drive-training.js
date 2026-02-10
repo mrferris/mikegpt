@@ -172,6 +172,7 @@ function updateTrainingHistory() {
             <div class="history-metrics">
                 <div class="metric-item">L2: ${formatMetric(item.l2Diff)}</div>
                 <div class="metric-item">KL: ${formatMetric(item.klDivergence)}</div>
+                ${item.stepsTaken ? `<div class="metric-item">Steps: ${item.stepsTaken}</div>` : ''}
             </div>
         `;
         historyList.appendChild(div);
@@ -224,7 +225,8 @@ async function exportSelections() {
             positivePaths: positivePaths,
             negativePaths: negativePaths,
             l2Diff: result.l2_diff,
-            klDivergence: result.kl_divergence
+            klDivergence: result.kl_divergence,
+            stepsTaken: result.steps_taken
         });
 
         // Update displays

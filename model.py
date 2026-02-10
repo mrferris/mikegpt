@@ -68,7 +68,7 @@ class Model:
             "<|endoftext|>",
             "<|Me|>",
             "<|Them|>",
-            "<|ConversationStart|>",
+            # "<|ConversationStart|>",
             "<|Loved|>",
             "<|Liked|>",
             "<|Laughed at|>",
@@ -93,11 +93,13 @@ class Model:
         self.current_checkpoint = checkpoint_path
 
         # Prompt-level KV cache: computed once per prompt, reused for all tree expansions
-        self._prompt_kv_cache = None   # opaque cache from model.encode_kv()
+        self._prompt_kv_cache = None  # opaque cache from model.encode_kv()
         self._prompt_kv_tokens = None  # token list used to build the cache
         self._prompt_kv_logits = None  # logits from encode_kv (for primed logits)
-        self._gen_kv_cache = None      # running KV cache for incremental chat decode
-        self._primed_logits = None     # stored logits from prime(), used by first next_token()
+        self._gen_kv_cache = None  # running KV cache for incremental chat decode
+        self._primed_logits = (
+            None  # stored logits from prime(), used by first next_token()
+        )
 
     def save_checkpoint(self, name: str = None) -> str:
         """Save current model state and optimizer state. Returns the checkpoint path."""
@@ -212,7 +214,10 @@ class Model:
                 # Use stored logits from prime() — avoids re-forwarding the last prompt token
                 last_logits = self._primed_logits / temperature
                 self._primed_logits = None
-            elif self._gen_kv_cache is not None and self.current_tokens.size(1) <= self.context_length:
+            elif (
+                self._gen_kv_cache is not None
+                and self.current_tokens.size(1) <= self.context_length
+            ):
                 # Incremental decode: forward only the last token with the running KV cache
                 last_token = self.current_tokens[:, -1:]
                 logits, self._gen_kv_cache = self.model.forward_incremental(
@@ -267,7 +272,9 @@ class Model:
             # Rebuild KV cache from truncated sequence (minus last token
             # for the next_token() pattern) to restore incremental decoding
             with torch.no_grad():
-                _, self._gen_kv_cache = self.model.encode_kv(self.current_tokens[:, :-1])
+                _, self._gen_kv_cache = self.model.encode_kv(
+                    self.current_tokens[:, :-1]
+                )
         else:
             self.current_tokens = torch.cat([self.current_tokens, new_token], dim=1)
 
@@ -430,7 +437,8 @@ class Model:
             prompt_tokens is not None
             and self._prompt_kv_cache is not None
             and all(
-                len(seq) > len(prompt_tokens) and seq[: len(prompt_tokens)] == prompt_tokens
+                len(seq) > len(prompt_tokens)
+                and seq[: len(prompt_tokens)] == prompt_tokens
                 for seq in uncached_seqs
             )
         )
@@ -443,21 +451,29 @@ class Model:
             max_suffix_len = max(suffix_lengths)
 
             padded_suffixes = [s + [0] * (max_suffix_len - len(s)) for s in suffixes]
-            suffix_tensor = torch.tensor(padded_suffixes, device=self.device, dtype=torch.long)
+            suffix_tensor = torch.tensor(
+                padded_suffixes, device=self.device, dtype=torch.long
+            )
 
             with torch.no_grad():
-                logits = self.model.forward_with_kv(suffix_tensor, self._prompt_kv_cache)
+                logits = self.model.forward_with_kv(
+                    suffix_tensor, self._prompt_kv_cache
+                )
 
                 # Gather logits at each suffix's last real token position
                 last_indices = torch.tensor(
-                    [l - 1 for l in suffix_lengths], device=self.device, dtype=torch.long
+                    [l - 1 for l in suffix_lengths],
+                    device=self.device,
+                    dtype=torch.long,
                 )
                 gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
                 last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature
                 last_logits[:, 0] = float("-inf")
 
                 probs = F.softmax(last_logits, dim=-1)
-                sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
+                sorted_probs, sorted_indices = torch.sort(
+                    probs, dim=-1, descending=True
+                )
                 sorted_probs_cpu = sorted_probs.cpu()
                 sorted_indices_cpu = sorted_indices.cpu()
         else:
@@ -469,7 +485,7 @@ class Model:
             if prompt_tokens is None:
                 prompt_tok = self.tokenizer.encode(prompt)
                 if len(prompt_tok) > self.context_length:
-                    prompt_tok = prompt_tok[-self.context_length:]
+                    prompt_tok = prompt_tok[-self.context_length :]
                 self._ensure_prompt_kv(prompt_tok)
 
             padded = [seq + [0] * (max_len - len(seq)) for seq in uncached_seqs]
@@ -486,7 +502,9 @@ class Model:
                 last_logits[:, 0] = float("-inf")
 
                 probs = F.softmax(last_logits, dim=-1)
-                sorted_probs, sorted_indices = torch.sort(probs, dim=-1, descending=True)
+                sorted_probs, sorted_indices = torch.sort(
+                    probs, dim=-1, descending=True
+                )
                 sorted_probs_cpu = sorted_probs.cpu()
                 sorted_indices_cpu = sorted_indices.cpu()
 
@@ -672,10 +690,12 @@ class Model:
         prompt: list[int],
         responses: list[list[int]],
         rewards: list[float],
-        num_steps: int = 1,
+        target_kl: float = 0.05,
+        max_steps: int = 100,
     ) -> dict:
         """
         Unified GRPO-based training for any group size.
+        Trains until model KL divergence from pre-training state reaches target_kl.
 
         For pair mode: responses=[positive, negative], rewards=[1.0, -1.0]
         For group mode: responses=[resp1..resp8], rewards=[8,7,6,5,4,3,2,1] (from ranks)
@@ -684,6 +704,7 @@ class Model:
         - probability_changes: list[float] - percentage change per response
         - l2_diff: float - L2 norm of parameter changes
         - kl_divergence: float - mean KL(before || after) across response positions
+        - steps_taken: int - number of optimizer steps executed
         """
         from torch.nn.utils.rnn import pad_sequence
         from lm.training.reinforcement.log_probs import calculate_model_log_probs
@@ -702,20 +723,13 @@ class Model:
             padding_value=0,
         )
 
-        # Build full sequences (prompt + response) for KL divergence calculation
-        full_sequences = [prompt + r for r in responses]
-        max_len = max(len(s) for s in full_sequences)
-        padded = [s + [0] * (max_len - len(s)) for s in full_sequences]
-        full_tensor = torch.tensor(padded, dtype=torch.long, device=self.device)
-
         # Snapshot parameters before training (for L2 diff)
         param_snapshot = {
             name: param.detach().clone()
             for name, param in self.model.named_parameters()
         }
 
-        # Calculate log probs before training
-        # Note: calculate_model_log_probs returns (per_token_log_probs, mask) tuple
+        # Calculate log probs before training (for probability_changes)
         with torch.no_grad():
             before_per_token_log_probs, _ = calculate_model_log_probs(
                 self.model,
@@ -724,18 +738,15 @@ class Model:
                 response_tensor,
                 response_lengths,
             )
-            # Sum per-token log probs to get sequence-level
             before_log_probs = before_per_token_log_probs.sum(dim=-1)
 
-            # Get full logits for KL divergence (before training)
-            before_logits = self.model(full_tensor)  # [batch, seq_len, vocab_size]
-            before_log_probs_full = F.log_softmax(before_logits, dim=-1)
-            before_probs_full = torch.exp(before_log_probs_full)
-
-        # Execute the GRPO training step
-        # Note: model parameter removed, uses self.model internally
-        self.trainable_model.do_grpo_step(
-            prompt=prompt, responses=responses, rewards=rewards, num_steps=num_steps
+        # Execute the GRPO training step (loops until target KL reached)
+        grpo_result = self.trainable_model.do_grpo_step(
+            prompt=prompt,
+            responses=responses,
+            rewards=rewards,
+            target_kl=target_kl,
+            max_steps=max_steps,
         )
 
         # Calculate L2 diff of parameter changes
@@ -745,7 +756,7 @@ class Model:
             l2_diff += (diff**2).sum().item()
         l2_diff = l2_diff**0.5
 
-        # Calculate log probs after training
+        # Calculate log probs after training (for probability_changes)
         with torch.no_grad():
             after_per_token_log_probs, _ = calculate_model_log_probs(
                 self.model,
@@ -754,22 +765,7 @@ class Model:
                 response_tensor,
                 response_lengths,
             )
-            # Sum per-token log probs to get sequence-level
             after_log_probs = after_per_token_log_probs.sum(dim=-1)
-
-            # Get full logits for KL divergence (after training)
-            after_logits = self.model(full_tensor)
-            after_log_probs_full = F.log_softmax(after_logits, dim=-1)
-
-            # KL(before || after) = sum_x P_before(x) * (log P_before(x) - log P_after(x))
-            # Compute per position, then average over response positions only
-            kl_per_position = (
-                before_probs_full * (before_log_probs_full - after_log_probs_full)
-            ).sum(dim=-1)
-
-            # Only include response positions (after prompt), average across all
-            prompt_len = len(prompt)
-            kl_divergence = kl_per_position[:, prompt_len:].mean().item()
 
         # Convert to probability changes (as percentages)
         before_probs = torch.exp(before_log_probs) * 100
@@ -783,5 +779,6 @@ class Model:
         return {
             "probability_changes": prob_changes,
             "l2_diff": l2_diff,
-            "kl_divergence": kl_divergence,
+            "kl_divergence": grpo_result["final_kl"],
+            "steps_taken": grpo_result["steps_taken"],
         }

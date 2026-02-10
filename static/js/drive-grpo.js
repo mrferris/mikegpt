@@ -287,7 +287,8 @@ function addGrpoToHistory(result) {
         negativePaths: rankedPaths.slice(4, 8),
         allChanges: result.probability_changes,
         l2Diff: result.l2_diff,
-        klDivergence: result.kl_divergence
+        klDivergence: result.kl_divergence,
+        stepsTaken: result.steps_taken
     });
 
     // Update the history display

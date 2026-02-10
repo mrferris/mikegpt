@@ -418,14 +418,15 @@ def train():
         # Tokenize the prompt
         prompt_tokens = model.tokenizer.encode(prompt_text)
 
-        # Call unified training step (returns dict with metrics)
+        # Call unified training step (loops until target KL reached)
         training_result = model.do_training_step(
-            prompt=prompt_tokens, responses=responses, rewards=rewards, num_steps=1
+            prompt=prompt_tokens, responses=responses, rewards=rewards
         )
 
         probability_changes = training_result["probability_changes"]
         l2_diff = training_result["l2_diff"]
         kl_divergence = training_result["kl_divergence"]
+        steps_taken = training_result["steps_taken"]
 
         # Determine type based on group size
         train_type = "pair" if len(responses) == 2 else "group"
@@ -448,6 +449,7 @@ def train():
                 "probability_changes": probability_changes,
                 "l2_diff": l2_diff,
                 "kl_divergence": kl_divergence,
+                "steps_taken": steps_taken,
             }
         )
 
@@ -462,6 +464,7 @@ def train():
                 "probability_changes": probability_changes,
                 "l2_diff": l2_diff,
                 "kl_divergence": kl_divergence,
+                "steps_taken": steps_taken,
                 "checkpoint_saved": checkpoint_name,
             }
         )
