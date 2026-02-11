@@ -286,18 +286,43 @@ body {
 /* Reactions */
 .reaction {
     position: absolute;
-    bottom: -8px;
-    right: -8px;
-    background: white;
+    top: -20px;
+    right: -18px;
+    background: #007AFF;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    font-size: 15px;
+    padding-top: 2px;
     animation: reactionPop 0.3s ease-out;
+    z-index: 1;
+    overflow: visible;
+    filter: saturate(1.5) brightness(1.05);
+}
+
+.reaction::before {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    right: 0px;
+    width: 10px;
+    height: 10px;
+    background: #007AFF;
+    border-radius: 50%;
+}
+
+.reaction::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    right: -3px;
+    width: 5px;
+    height: 5px;
+    background: #007AFF;
+    border-radius: 50%;
 }
 
 .message.user .reaction {

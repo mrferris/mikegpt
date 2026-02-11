@@ -15,6 +15,9 @@ let messageTokenIdSnapshots = []; // Parallel to messageHistorySnapshots
 // Auto-start mode: if true, MikeGPT sends the first message
 let mikeStartsFirst = true;
 
+// TEMP: force a Loved react on the first user message for testing
+let hasForceReacted = false;
+
 // Update time in status bar
 function updateTime() {
     const now = new Date();
@@ -30,8 +33,8 @@ setInterval(updateTime, 60000);
 // Reaction mapping
 const REACTIONS = {
     '<|Liked|>': '👍',
-    '<|Laughed at|>': '😂',
-    '<|Loved|>': '❤️',
+    '<|Laughed at|>': '😆',
+    '<|Loved|>': '🩷',
     '<|Disliked|>': '👎',
     '<|Questioned|>': '❓',
     '<|Emphasized|>': '‼️',
@@ -132,6 +135,9 @@ function addReaction(reactionToken) {
     const bubble = lastUserMessageElement.querySelector('.message-bubble');
     bubble.style.position = 'relative';
     bubble.appendChild(reactionDiv);
+
+    // Push message down so the reaction doesn't overlap the previous message
+    lastUserMessageElement.style.marginTop = '16px';
 }
 
 // Send message to backend with streaming
@@ -233,6 +239,12 @@ async function sendMessage() {
                             // After snapshot, append the response text for next message's snapshot
                             cycleHistory += data.response;
                             cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
+
+                            // TEMP: force Loved react on first user message for testing
+                            if (!hasForceReacted && lastUserMessageElement) {
+                                hasForceReacted = true;
+                                addReaction('<|Loved|>');
+                            }
                         }
 
                         // Show typing indicator again for next response
