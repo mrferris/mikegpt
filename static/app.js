@@ -30,7 +30,7 @@ setInterval(updateTime, 60000);
 // Reaction mapping
 const REACTIONS = {
     '<|Liked|>': '👍',
-    '<|Laughed|>': '😂',
+    '<|Laughed at|>': '😂',
     '<|Loved|>': '❤️',
     '<|Disliked|>': '👎',
     '<|Questioned|>': '❓',

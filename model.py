@@ -68,7 +68,7 @@ class Model:
             "<|endoftext|>",
             "<|Me|>",
             "<|Them|>",
-            # "<|ConversationStart|>",
+            "<|ConversationStart|>",
             "<|Loved|>",
             "<|Liked|>",
             "<|Laughed at|>",
