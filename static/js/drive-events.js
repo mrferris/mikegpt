@@ -141,6 +141,20 @@ document.addEventListener('keydown', (e) => {
             case 'E':
                 exportSelections();
                 break;
+            case 'Escape':
+                // Undo good selection first, then bad if no good exists
+                const goodIdx = selectedPaths.findLastIndex(p => p.type === 'positive');
+                if (goodIdx !== -1) {
+                    selectedPaths.splice(goodIdx, 1);
+                    updateSelectionsPanel();
+                } else {
+                    const badIdx = selectedPaths.findLastIndex(p => p.type === 'negative');
+                    if (badIdx !== -1) {
+                        selectedPaths.splice(badIdx, 1);
+                        updateSelectionsPanel();
+                    }
+                }
+                break;
         }
     }
 });

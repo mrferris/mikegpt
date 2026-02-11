@@ -15,8 +15,6 @@ let messageTokenIdSnapshots = []; // Parallel to messageHistorySnapshots
 // Auto-start mode: if true, MikeGPT sends the first message
 let mikeStartsFirst = true;
 
-// TEMP: force a Loved react on the first user message for testing
-let hasForceReacted = false;
 
 // Update time in status bar
 function updateTime() {
@@ -240,11 +238,6 @@ async function sendMessage() {
                             cycleHistory += data.response;
                             cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
 
-                            // TEMP: force Loved react on first user message for testing
-                            if (!hasForceReacted && lastUserMessageElement) {
-                                hasForceReacted = true;
-                                addReaction('<|Loved|>');
-                            }
                         }
 
                         // Show typing indicator again for next response
