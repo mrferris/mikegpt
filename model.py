@@ -216,7 +216,7 @@ class Model:
                 self._primed_logits = None
             elif (
                 self._gen_kv_cache is not None
-                and self.current_tokens.size(1) <= self.context_length
+                and self.current_tokens.size(1) < self.context_length
             ):
                 # Incremental decode: forward only the last token with the running KV cache
                 last_token = self.current_tokens[:, -1:]
