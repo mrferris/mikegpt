@@ -343,15 +343,24 @@ async function autoStartConversation() {
 
                         hideTypingIndicator();
 
-                        // For auto-start, first response doesn't add <|Me|>,
-                        // subsequent ones do (mirrors backend logic)
-                        if (cycleHistory !== '<|ConversationStart|><|Me|>') {
-                            cycleHistory += '<|Me|>';
+                        // Check if it's a reaction
+                        if (data.response.startsWith('<|') && data.response.endsWith('|>')) {
+                            // Add to context (so model stays in react-friendly tokenspace)
+                            // but only display if there's a user message to attach to
+                            cycleHistory += data.response;
+                            cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
+                            addReaction(data.response);
+                        } else {
+                            // For auto-start, first response doesn't add <|Me|>,
+                            // subsequent ones do (mirrors backend logic)
+                            if (cycleHistory !== '<|ConversationStart|><|Me|>') {
+                                cycleHistory += '<|Me|>';
+                            }
+                            // Token IDs from backend already include leading <|Me|>
+                            addMessage(data.response, false, data.token_ids);
+                            cycleHistory += data.response;
+                            cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
                         }
-                        // Token IDs from backend already include leading <|Me|>
-                        addMessage(data.response, false, data.token_ids);
-                        cycleHistory += data.response;
-                        cycleTokenIds = cycleTokenIds.concat(data.token_ids || []);
 
                         // Show typing indicator again for next response
                         showTypingIndicator();
