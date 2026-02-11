@@ -453,8 +453,8 @@ def train():
             }
         )
 
-        # Auto-save checkpoint after training
-        checkpoint_name = f"step_{step_num}"
+        # Auto-save checkpoint after training (always overwrites the same file)
+        checkpoint_name = "Post-Trained"
         checkpoint_path = model.save_checkpoint(checkpoint_name)
 
         return jsonify(
