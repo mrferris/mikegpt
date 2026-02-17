@@ -79,7 +79,6 @@ function rebuildDeeperLayers(container) {
     // Get the selected node at depth 0 and traverse to its children
     const selectedNode = nodes[currentIndex];
     if (!selectedNode || !selectedNode.children) return;
-    if (selectedNode.token_id === 2) return; // <|Them|> ends generation
 
     let childNodes = selectedNode.children;
 
@@ -243,9 +242,6 @@ function renderLevels(animateFromPage = null) {
 
         lastRenderedNodes = nodes;
         lastDepthPath = depthPath;
-
-        // <|Them|> ends generation - don't show deeper layers
-        if (nodes[selectedIdx] && nodes[selectedIdx].token_id === 2) break;
 
         // Move to children of selected node for next level
         if (!nodes[selectedIdx] || !nodes[selectedIdx].children) {
