@@ -338,7 +338,12 @@ function positionTrackForPage(track, targetPage, animateFromPage) {
 function updatePathDisplay() {
     const pathText = document.getElementById('path-text');
     const fullPath = getCurrentFullPath();
-    pathText.textContent = fullPath || '(start)';
+    let text = fullPath || '(start)';
+    const maxLen = 200;
+    if (text.length > maxLen) {
+        text = '…' + text.slice(text.length - maxLen);
+    }
+    pathText.textContent = text;
 }
 
 function updateDepth() {
