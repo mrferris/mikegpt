@@ -44,6 +44,7 @@ let currentPage = 0; // Current page of tokens being viewed (0-indexed)
 // Selection and training state
 let selectedPaths = [];
 let trainingHistory = [];
+let trainingInProgress = false;
 
 // Configuration
 let initialK = 5; // Policy boundary (user's k value)

@@ -180,6 +180,7 @@ function updateTrainingHistory() {
 }
 
 async function exportSelections() {
+    if (trainingInProgress) return;
     if (selectedPaths.length === 0) {
         alert('No paths selected yet');
         return;
@@ -194,6 +195,7 @@ async function exportSelections() {
         return;
     }
 
+    trainingInProgress = true;
     try {
         // Use unified training endpoint with responses + rewards
         const response = await fetch('/api/train', {
@@ -238,5 +240,7 @@ async function exportSelections() {
 
     } catch (error) {
         alert('Training error: ' + error.message);
+    } finally {
+        trainingInProgress = false;
     }
 }

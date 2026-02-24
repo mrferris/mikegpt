@@ -229,8 +229,10 @@ function getOrdinalSuffix(n) {
 // Submit rankings for training
 async function submitGrpoRankings() {
     if (grpoGenerating) return;
+    if (trainingInProgress) return;
     if (grpoRankings.length !== 8) return;
 
+    trainingInProgress = true;
     try {
         // Build responses and rewards arrays
         // grpoRankings[i] = responseIndex that got rank i+1
@@ -265,6 +267,8 @@ async function submitGrpoRankings() {
     } catch (error) {
         console.error('Group training failed:', error);
         alert('Training error: ' + error.message);
+    } finally {
+        trainingInProgress = false;
     }
 }
 
