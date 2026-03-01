@@ -391,6 +391,18 @@ async function autoStartConversation() {
     }
 }
 
+// Mobile tab switching
+document.querySelectorAll('.mobile-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.mobile-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelector('.page-layout').dataset.activeTab = tab.dataset.tab;
+        if (tab.dataset.tab === 'about') {
+            window.scrollTo(0, 0);
+        }
+    });
+});
+
 // Initialize: auto-start if enabled
 if (mikeStartsFirst) {
     autoStartConversation();

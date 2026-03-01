@@ -6,6 +6,17 @@
     <title>Drive</title>
     <style>html,body{background:#000;margin:0}</style>
     <link rel="stylesheet" href="drive.css">
+    <script>
+        // Set mobile scale based on screen size
+        function setMobileScale() {
+            if (window.innerWidth <= 768 && window.innerHeight > window.innerWidth) {
+                var scale = window.innerHeight / 1400;
+                document.documentElement.style.setProperty('--mobile-scale', scale);
+            }
+        }
+        setMobileScale();
+        window.addEventListener('resize', setMobileScale);
+    </script>
 </head>
 <body>
     <div id="loading-screen">

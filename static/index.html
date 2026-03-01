@@ -7,7 +7,11 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="page-layout">
+    <div class="mobile-tabs" id="mobile-tabs">
+        <button class="mobile-tab" data-tab="about">About</button>
+        <button class="mobile-tab active" data-tab="chat">Talk to MikeGPT</button>
+    </div>
+    <div class="page-layout" data-active-tab="chat">
         <!-- Left: Profile panel -->
         <div class="profile-panel">
             <div class="profile-content">
@@ -15,9 +19,9 @@
                 <p class="profile-subtitle">An Experiment in Language Modeling</p>
                 <div class="profile-divider"></div>
                 <div class="profile-bio">
-                    <p>I built a <a target="_blank" rel="noopener noreferrer" href="https://github.com/mrferris/artisinal-lm">transformer</a> from scratch and pre-trained it on ten years of my text messages (two million tokens), with a custom tokenizer that keeps every emoji intact, and masked loss so it only learns to talk like me. The resulting pre-trained model is...bad. Often hilarious, but bad.</p>
-                    <p>To fix that, I built MikeRL. It exposes the model's full token-space decision tree and allows for model observability and interactive, surgical preference alignment: picking good continuations, rejecting bad ones, training with GRPO, rolling back steps that make things worse.</p>
-                    <p>Click on a blue message to try it out!</p>
+                    <p>What do you get when you write a <a target="_blank" rel="noopener noreferrer" href="https://github.com/mrferris/artisinal-lm">transformer model</a> from scratch and pre-train it on nothing but ten years of your own iMessages? <b>A really dumb model that is occasionally coherent and often hilarious.</b></p>
+                    <p>What about when you create an interactive RL tool to visually explore the dumb model's token space, surgically applying GRPO to the tree's branches as you go in order to align the model. <b>Getting smarter! Click a blue message to dive into MikeRL.</b></p>
+                    <p>Ok, and then what about when you continuously auto-align the model to your new sent iMessages? <b>A model that gets better and better at emulation over time. In another 10 years it will be AGI.</b></p>
                 </div>
             </div>
         </div>

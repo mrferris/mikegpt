@@ -1343,3 +1343,38 @@ body.light-mode .grpo-instructions .key {
     border-color: #d1d1d1;
     color: #000;
 }
+
+/* ========== Mobile: Rotate to landscape ========== */
+
+@media (max-width: 768px) and (orientation: portrait) {
+    body {
+        transform: rotate(90deg) scale(var(--mobile-scale, 0.6));
+        transform-origin: top left;
+        width: calc(1 / var(--mobile-scale, 0.6) * 100vh);
+        height: calc(1 / var(--mobile-scale, 0.6) * 100vw);
+        position: absolute;
+        top: 0;
+        left: 100vw;
+        overflow: hidden;
+    }
+
+    /* Flatten controls overlay to a single row */
+    .controls-overlay {
+        flex-wrap: nowrap !important;
+        gap: 12px !important;
+        bottom: 10px !important;
+        padding: 8px 16px !important;
+        font-size: 11px !important;
+    }
+
+    .controls-overlay .control-hint {
+        white-space: nowrap;
+    }
+
+    .controls-overlay .key {
+        min-width: 20px !important;
+        padding: 2px 6px !important;
+        font-size: 10px !important;
+    }
+}
+
