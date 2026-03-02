@@ -107,6 +107,9 @@ function updateSelectionsPanel() {
         placeholder.textContent = 'No negative example selected';
         selectionsList.appendChild(placeholder);
     }
+
+    // Keep mobile buttons in sync
+    if (typeof updateMobileButtons === 'function') updateMobileButtons();
 }
 
 function formatPercent(value) {

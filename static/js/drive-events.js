@@ -128,6 +128,7 @@ document.addEventListener('keydown', (e) => {
             case 'Backspace':
                 e.preventDefault();
                 goBack();
+                updateMobileButtons();
                 break;
             case 'g':
             case 'G':
@@ -158,3 +159,124 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// ========== Mobile Touch Controls ==========
+
+// Button handlers — toggle good/bad, greyed-out train until both selected
+function updateMobileButtons() {
+    const hasGood = selectedPaths.some(p => p.type === 'positive');
+    const hasBad = selectedPaths.some(p => p.type === 'negative');
+    const btnGood = document.getElementById('btn-good');
+    const btnBad = document.getElementById('btn-bad');
+    const btnExec = document.getElementById('btn-execute');
+    if (btnGood) btnGood.classList.toggle('selected', hasGood);
+    if (btnBad) btnBad.classList.toggle('selected', hasBad);
+    if (btnExec) btnExec.classList.toggle('ready', hasGood && hasBad);
+
+    // Show/hide back button based on depth
+    const navGroup = document.getElementById('mobile-nav-group');
+    if (navGroup) navGroup.style.display = currentPath.length > 0 ? 'flex' : 'none';
+}
+
+document.getElementById('btn-good')?.addEventListener('click', () => {
+    const hasGood = selectedPaths.some(p => p.type === 'positive');
+    if (hasGood) {
+        const idx = selectedPaths.findLastIndex(p => p.type === 'positive');
+        selectedPaths.splice(idx, 1);
+        updateSelectionsPanel();
+    } else {
+        markPath('positive');
+    }
+    updateMobileButtons();
+});
+
+document.getElementById('btn-bad')?.addEventListener('click', () => {
+    const hasBad = selectedPaths.some(p => p.type === 'negative');
+    if (hasBad) {
+        const idx = selectedPaths.findLastIndex(p => p.type === 'negative');
+        selectedPaths.splice(idx, 1);
+        updateSelectionsPanel();
+    } else {
+        markPath('negative');
+    }
+    updateMobileButtons();
+});
+
+document.getElementById('btn-execute')?.addEventListener('click', () => {
+    const hasGood = selectedPaths.some(p => p.type === 'positive');
+    const hasBad = selectedPaths.some(p => p.type === 'negative');
+    if (hasGood && hasBad) exportSelections();
+});
+
+document.getElementById('btn-back')?.addEventListener('click', () => {
+    goBack();
+    updateMobileButtons();
+});
+
+// Swipe to navigate, double tap to go deeper
+(function() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchActive = false;
+
+    // Reset touch state when returning from another tab
+    document.addEventListener('visibilitychange', () => {
+        touchActive = false;
+        lastTapTime = 0;
+    });
+    let lastTapTime = 0;
+
+    let touchOnTopRow = false;
+
+    document.addEventListener('touchstart', (e) => {
+        // Ignore touches on buttons/inputs
+        if (e.target.closest('.mobile-controls, .mobile-grpo-controls, .selections-panel, input, button')) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchOnTopRow = true;
+        touchActive = true;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+        if (!touchActive) return;
+        touchActive = false;
+        if (e.target.closest('.mobile-controls, .mobile-grpo-controls, .selections-panel, input, button')) return;
+        if (rlMethod !== 'pair') return;
+
+        const touch = e.changedTouches[0];
+        const rawDx = touch.clientX - touchStartX;
+        const rawDy = touch.clientY - touchStartY;
+
+        // After 90deg CSS rotation, physical horizontal swipe = vertical delta
+        // Swap axes so swipe logic works in rotated coordinates
+        const isMobileRotated = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+        const dx = isMobileRotated ? -rawDy : rawDx;
+        const dy = isMobileRotated ? rawDx : rawDy;
+
+        // Swipe detection — jump to next/previous page
+        if (touchOnTopRow && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            e.preventDefault();
+            const oldPage = currentPage;
+            if (dx > 0) {
+                // Swipe right → next page
+                const nextPageStart = (currentPage + 1) * initialK;
+                // Navigate right until we reach the next page
+                for (let i = currentIndex; i < nextPageStart && i < totalK - 1; i++) {
+                    navigateRight();
+                }
+            } else {
+                // Swipe left → previous page
+                if (currentPage > 0) {
+                    const prevPageStart = (currentPage - 1) * initialK;
+                    currentIndex = prevPageStart;
+                    currentPage = currentPage - 1;
+                    animatePageTransition(oldPage, currentPage);
+                    updatePathDisplay();
+                    ensureCurrentTokenHasDepth();
+                }
+            }
+            return;
+        }
+
+    }, { passive: false });
+})();

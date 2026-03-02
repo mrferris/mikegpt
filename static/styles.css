@@ -571,4 +571,8 @@ body {
         border-radius: 0;
         box-shadow: none;
     }
+
+    .status-bar {
+        display: none;
+    }
 }

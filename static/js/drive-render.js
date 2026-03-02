@@ -38,9 +38,15 @@ function createTokenCard(node, idx, depth, selectedIdx) {
 
     if (depth === 0) {
         card.addEventListener('click', () => {
-            currentIndex = idx;
-            renderLevels();
-            updatePathDisplay();
+            if (currentIndex === idx) {
+                // Tapping the already-selected card goes deeper
+                selectAndAdvance();
+                if (typeof updateMobileButtons === 'function') updateMobileButtons();
+            } else {
+                currentIndex = idx;
+                renderLevels();
+                updatePathDisplay();
+            }
         });
     }
 

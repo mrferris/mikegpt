@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Drive</title>
     <style>html,body{background:#000;margin:0}</style>
     <link rel="stylesheet" href="drive.css">
@@ -104,6 +104,17 @@
             <div class="control-hint">
                 <span class="key">E</span>
                 <span>Export selections</span>
+            </div>
+        </div>
+
+        <div class="mobile-controls" id="mobile-controls">
+            <div class="mobile-btn-group" id="mobile-nav-group" style="display:none">
+                <button class="mobile-btn" id="btn-back">Back</button>
+            </div>
+            <div class="mobile-btn-group">
+                <button class="mobile-btn" id="btn-good">Good</button>
+                <button class="mobile-btn" id="btn-bad">Bad</button>
+                <button class="mobile-btn mobile-btn-execute" id="btn-execute">Train</button>
             </div>
         </div>
 

@@ -1344,6 +1344,12 @@ body.light-mode .grpo-instructions .key {
     color: #000;
 }
 
+/* ========== Mobile Controls ========== */
+
+.mobile-controls {
+    display: none;
+}
+
 /* ========== Mobile: Rotate to landscape ========== */
 
 @media (max-width: 768px) and (orientation: portrait) {
@@ -1358,23 +1364,114 @@ body.light-mode .grpo-instructions .key {
         overflow: hidden;
     }
 
-    /* Flatten controls overlay to a single row */
+    /* Disable double-tap-to-zoom */
+    body {
+        touch-action: manipulation;
+    }
+
+    /* Hide keyboard legend, show touch buttons */
     .controls-overlay {
-        flex-wrap: nowrap !important;
-        gap: 12px !important;
-        bottom: 10px !important;
-        padding: 8px 16px !important;
-        font-size: 11px !important;
+        display: none !important;
     }
 
-    .controls-overlay .control-hint {
-        white-space: nowrap;
+    /* 1. Push token explorer down so selections panel doesn't overlap */
+    .level-0 { transform: translateZ(0px) translateY(0px) scale(1) !important; }
+    .level-1 { transform: translateZ(-500px) translateY(100px) scale(0.82) !important; }
+    .level-2 { transform: translateZ(-1000px) translateY(170px) scale(0.68) !important; }
+    .level-3 { transform: translateZ(-1500px) translateY(220px) scale(0.56) !important; }
+
+    /* 2 & 3. Kill hover/tap ghost highlights and animation on mobile */
+    .token-card {
+        transition: none !important;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .token-card:hover {
+        transform: none !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+    }
+    .token-card.active:hover {
+        border-color: #fff !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+    }
+    .token-card.dimmed {
+        transform: none !important;
     }
 
-    .controls-overlay .key {
-        min-width: 20px !important;
-        padding: 2px 6px !important;
-        font-size: 10px !important;
+    .mobile-controls {
+        position: fixed;
+        bottom: 20px;
+        left: 0;
+        right: 0;
+        z-index: 200;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+    }
+
+    .mobile-btn-group {
+        display: flex;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 10px 14px;
+        pointer-events: auto;
+    }
+
+    #mobile-nav-group {
+        position: absolute;
+        right: calc(50% + 120px);
+    }
+
+    .mobile-btn {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: #ccc;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-btn:active {
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* 4. Good/Bad/Train button states */
+    #btn-good {
+        color: #ccc;
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+    #btn-good.selected {
+        color: #34c759;
+        border-color: rgba(52, 199, 89, 0.6);
+        background: rgba(52, 199, 89, 0.15);
+    }
+
+    #btn-bad {
+        color: #ccc;
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+    #btn-bad.selected {
+        color: #ff3b30;
+        border-color: rgba(255, 59, 48, 0.6);
+        background: rgba(255, 59, 48, 0.15);
+    }
+
+    .mobile-btn-execute {
+        color: #555;
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    .mobile-btn-execute.ready {
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.5);
+    }
+    .mobile-btn-execute.ready:active {
+        background: rgba(255, 255, 255, 0.2);
     }
 }
 
