@@ -1350,6 +1350,10 @@ body.light-mode .grpo-instructions .key {
     display: none;
 }
 
+.mobile-grpo-controls {
+    display: none;
+}
+
 /* ========== Mobile: Rotate to landscape ========== */
 
 @media (max-width: 768px) and (orientation: portrait) {
@@ -1472,6 +1476,39 @@ body.light-mode .grpo-instructions .key {
     }
     .mobile-btn-execute.ready:active {
         background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* GRPO mobile controls */
+    .grpo-instructions {
+        display: none !important;
+    }
+
+    .mobile-grpo-controls {
+        display: flex;
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        gap: 12px;
+        align-items: center;
+        z-index: 200;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 10px 20px;
+    }
+
+    .mobile-grpo-hint {
+        color: #999;
+        font-size: 14px;
+        white-space: nowrap;
+    }
+
+    /* Make response rows tappable */
+    .grpo-response-row {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
     }
 }
 

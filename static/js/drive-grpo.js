@@ -20,6 +20,12 @@ function renderGrpoView() {
             <div class="grpo-response-text empty" id="grpo-text-${i}">Waiting...</div>
             <div class="grpo-rank-badge" id="grpo-rank-${i}"></div>
         `;
+        // Tap to rank on mobile
+        row.addEventListener('click', () => {
+            if (grpoGenerating) return;
+            const letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+            handleGrpoKeyPress(letters[i]);
+        });
         responsesContainer.appendChild(row);
     }
 }
@@ -216,6 +222,10 @@ function updateGrpoRankDisplay() {
         rankEl.textContent = `${rank + 1}${getOrdinalSuffix(rank + 1)}`;
         rankEl.classList.add('visible');
     }
+
+    // Update mobile train button state
+    const grpoExecBtn = document.getElementById('btn-grpo-execute');
+    if (grpoExecBtn) grpoExecBtn.classList.toggle('ready', grpoRankings.length >= 2);
 }
 
 // Get ordinal suffix (st, nd, rd, th)
@@ -230,15 +240,16 @@ function getOrdinalSuffix(n) {
 async function submitGrpoRankings() {
     if (grpoGenerating) return;
     if (trainingInProgress) return;
-    if (grpoRankings.length !== 8) return;
+    if (grpoRankings.length < 2) return;
 
     trainingInProgress = true;
     try {
         // Build responses and rewards arrays
         // grpoRankings[i] = responseIndex that got rank i+1
         // rank 1 is best (highest reward), rank 8 is worst (lowest reward)
+        const n = grpoRankings.length;
         const responses = grpoRankings.map(responseIndex => grpoResponses[responseIndex].tokens);
-        const rewards = grpoRankings.map((_, rankIndex) => 8 - rankIndex);  // rank 1 → 8, rank 8 → 1
+        const rewards = grpoRankings.map((_, rankIndex) => n - rankIndex);  // rank 1 → n, rank n → 1
 
         const response = await fetch('/api/train', {
             method: 'POST',

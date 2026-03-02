@@ -95,7 +95,7 @@ document.addEventListener('keydown', (e) => {
                 return;
             } else if (e.key === 'Enter') {
                 e.preventDefault();
-                if (grpoRankings.length === 8) {
+                if (grpoRankings.length >= 2) {
                     submitGrpoRankings();
                 }
                 return;
@@ -211,6 +211,10 @@ document.getElementById('btn-execute')?.addEventListener('click', () => {
 document.getElementById('btn-back')?.addEventListener('click', () => {
     goBack();
     updateMobileButtons();
+});
+
+document.getElementById('btn-grpo-execute')?.addEventListener('click', () => {
+    if (grpoRankings.length >= 2) submitGrpoRankings();
 });
 
 // Swipe to navigate, double tap to go deeper
