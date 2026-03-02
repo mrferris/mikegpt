@@ -885,27 +885,26 @@ async function preloadDeeperLevelFullDepth() {
 }
 
 async function loadNextLayer(nodes, pathToNodes) {
-    if (isLoadingNextLayer) return; // Prevent cascading
-    isLoadingNextLayer = true;
-
     try {
-        // Collect all nodes that need children loaded
-        const nodesToExpand = nodes.map(node => ({
-            path: pathToNodes.map(p => p.token_id),
-            token_id: node.token_id
-        }));
+        // Collect nodes that actually need children loaded
+        const nodesToExpand = [];
+        for (const node of nodes) {
+            if (node.children) continue;
+            nodesToExpand.push({
+                path: pathToNodes.map(p => p.token_id),
+                token_id: node.token_id
+            });
+        }
+        if (nodesToExpand.length === 0) return;
 
         const childrenMap = await queueExpandDepth(nodesToExpand, initialK + 1);
 
         // Merge children into the tree
-
         for (const node of nodes) {
-            // Only set children if node doesn't already have them
             if (node.children) continue;
 
             const pathKey = [...pathToNodes.map(p => p.token_id), node.token_id].join(',');
             if (childrenMap[pathKey]) {
-                // Fix cumulative probability for loaded children
                 const children = childrenMap[pathKey];
                 for (const child of children) {
                     child.cumulative_prob = node.cumulative_prob * child.probability;
@@ -914,11 +913,9 @@ async function loadNextLayer(nodes, pathToNodes) {
             }
         }
 
-        isLoadingNextLayer = false;
-        // Re-render to show newly loaded layers (unless animating)
-        renderLevels(); // Always re-render after loading new data
+        // Re-render to show newly loaded layers
+        renderLevels();
     } catch (error) {
         console.error('Error loading depth:', error);
-        isLoadingNextLayer = false;
     }
 }
