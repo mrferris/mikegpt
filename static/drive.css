@@ -468,7 +468,7 @@ body.light-mode .page-separator-label {
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     padding: 30px 40px;
-    min-width: 200px;
+    min-width: 240px;
     text-align: center;
     cursor: pointer;
     transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -508,7 +508,7 @@ body.light-mode .page-separator-label {
     font-weight: 600;
     margin-bottom: 15px;
     word-wrap: break-word;
-    max-width: 200px;
+    max-width: 240px;
 }
 
 .token-prob {
