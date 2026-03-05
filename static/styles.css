@@ -329,6 +329,12 @@ body {
     right: -8px;
 }
 
+.reaction[data-emoji="<|Liked|>"],
+.reaction[data-emoji="<|Disliked|>"] {
+    padding-top: 0;
+    font-size: 14px;
+}
+
 @keyframes reactionPop {
     0% {
         transform: scale(0);

@@ -77,7 +77,7 @@ function addMessage(text, isUser, tokenIds) {
             // Skip the first token ID (the <|Me|> separator) since it's part of the prompt
             const responseTokenIds = msgTokenIds.slice(1);
 
-            window.open('/drive?prompt=' + encodeURIComponent(historySnapshot) +
+            window.open('/mike-rl?prompt=' + encodeURIComponent(historySnapshot) +
                 '&token_ids=' + encodeURIComponent(responseTokenIds.join(',')) +
                 '&bad_text=' + encodeURIComponent(msgText), '_blank');
         });
@@ -128,6 +128,7 @@ function addReaction(reactionToken) {
 
     const reactionDiv = document.createElement('div');
     reactionDiv.className = 'reaction';
+    reactionDiv.dataset.emoji = reactionToken;
     reactionDiv.textContent = emoji;
 
     const bubble = lastUserMessageElement.querySelector('.message-bubble');

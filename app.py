@@ -478,7 +478,7 @@ def index():
     return send_from_directory("static", "index.html")
 
 
-@app.route("/drive")
+@app.route("/mike-rl")
 def drive():
     return send_from_directory("static", "drive.html")
 
