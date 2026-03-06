@@ -46,11 +46,17 @@ body {
     letter-spacing: 0.3px;
 }
 
+.profile-github {
+    display: inline-block;
+    margin-top: 14px;
+    color: #1a1a1a;
+}
+
 .profile-divider {
     width: 50px;
     height: 1px;
     background: #c4b8ab;
-    margin: 32px 0;
+    margin: 14px 0 32px 0;
 }
 
 .profile-bio p {

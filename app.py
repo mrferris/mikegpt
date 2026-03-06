@@ -731,7 +731,6 @@ if __name__ == "__main__":
     )
     args = arguments.parse_args()
 
-    global ADMIN_PASSWORD
     ADMIN_PASSWORD = args.admin_password
     model = Model(checkpoint_path=args.checkpoint)
 
