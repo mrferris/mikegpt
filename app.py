@@ -9,19 +9,25 @@ from flask import (
     send_from_directory,
     Response,
     stream_with_context,
+    session,
 )
+from functools import wraps
 from model import Model
 import os
 import argparse
 import json
+import secrets
 import yaml
 from pathlib import Path
 from datetime import datetime
 import resource
 
 app = Flask(__name__, static_folder="static")
+app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(16))
 
+ADMIN_PASSWORD = None  # Set via --admin-password flag or ADMIN_PASSWORD env var
 TRAINING_HISTORY_PATH = Path(__file__).parent / "data" / "training_history.yml"
+CONVERSATIONS_DIR = Path(__file__).parent / "data" / "conversations"
 
 
 def load_training_history():
@@ -40,6 +46,55 @@ def save_training_step(step_data: dict):
     TRAINING_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(TRAINING_HISTORY_PATH, "w") as f:
         yaml.dump(history, f, default_flow_style=False)
+
+
+def safe_conversation_path(session_id):
+    """Return a safe file path for a session, or None if the ID is invalid."""
+    # Sanitize: only allow alphanumeric, underscore, hyphen
+    safe_id = "".join(c for c in session_id if c.isalnum() or c in ("_", "-"))
+    if not safe_id:
+        return None
+    filepath = CONVERSATIONS_DIR / f"{safe_id}.json"
+    # Verify resolved path is within CONVERSATIONS_DIR
+    if not filepath.resolve().is_relative_to(CONVERSATIONS_DIR.resolve()):
+        return None
+    return filepath
+
+
+def save_conversation(session_id, history, user_agent=None):
+    """Persist a conversation to disk."""
+    CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    filepath = safe_conversation_path(session_id)
+    if not filepath:
+        return
+    now = datetime.now().isoformat()
+    # Preserve created_at and user_agent from first save
+    created_at = now
+    existing_ua = None
+    if filepath.exists():
+        try:
+            existing = json.loads(filepath.read_text())
+            created_at = existing.get("created_at", now)
+            existing_ua = existing.get("user_agent")
+        except (json.JSONDecodeError, KeyError):
+            pass
+    filepath.write_text(json.dumps({
+        "session_id": session_id,
+        "created_at": created_at,
+        "updated_at": now,
+        "history": history,
+        "user_agent": existing_ua or user_agent,
+    }, indent=2))
+
+
+def admin_required(f):
+    """Decorator to require admin authentication."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("admin"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 
 # Initialize model
@@ -113,6 +168,7 @@ def generate():
 
             # Save final history
             conversations[session_id] = new_history
+            save_conversation(session_id, new_history, request.headers.get("User-Agent"))
 
             # Send final message with updated history
             yield f"data: {json.dumps({'done': True, 'history': new_history})}\n\n"
@@ -438,6 +494,8 @@ def train():
         history = load_training_history()
         step_num = len(history["steps"]) + 1
 
+        checkpoint_name = f"step_{step_num}"
+
         save_training_step(
             {
                 "timestamp": datetime.now().isoformat(),
@@ -450,11 +508,11 @@ def train():
                 "l2_diff": l2_diff,
                 "kl_divergence": kl_divergence,
                 "steps_taken": steps_taken,
+                "checkpoint": checkpoint_name,
             }
         )
 
-        # Auto-save checkpoint after training (always overwrites the same file)
-        checkpoint_name = "Post-Trained"
+        # Save checkpoint for this training step
         checkpoint_path = model.save_checkpoint(checkpoint_name)
 
         return jsonify(
@@ -473,6 +531,165 @@ def train():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    """Authenticate for admin dashboard."""
+    if not ADMIN_PASSWORD:
+        return jsonify({"error": "Admin not configured"}), 403
+    if request.json.get("password") == ADMIN_PASSWORD:
+        session["admin"] = True
+        return jsonify({"success": True})
+    return jsonify({"error": "Invalid password"}), 401
+
+
+@app.route("/api/admin/training-steps", methods=["GET"])
+@admin_required
+def admin_training_steps():
+    """Return training steps with checkpoint status."""
+    history = load_training_history()
+    checkpoints_dir = Path(os.environ.get("CHECKPOINTS_DIR", "checkpoints"))
+    for step in history["steps"]:
+        cp_name = step.get("checkpoint", f"step_{step['id']}")
+        cp_path = checkpoints_dir / f"{cp_name}.pt"
+        step["checkpoint_exists"] = cp_path.exists()
+        step["checkpoint_path"] = str(cp_path)
+    return jsonify(history)
+
+
+@app.route("/api/admin/conversations", methods=["GET"])
+@admin_required
+def admin_conversations():
+    """List all saved conversations."""
+    convos = []
+    if CONVERSATIONS_DIR.exists():
+        for f in sorted(CONVERSATIONS_DIR.glob("*.json"), reverse=True):
+            try:
+                data = json.loads(f.read_text())
+                # Parse message count from history
+                hist = data.get("history", "")
+                msg_count = hist.count("<|Them|>") + hist.count("<|Me|>")
+                # Extract first user message as preview
+                preview = ""
+                if "<|Them|>" in hist:
+                    after_them = hist.split("<|Them|>")[1]
+                    preview = after_them.split("<|")[0][:80]
+                elif "<|Me|>" in hist:
+                    after_me = hist.split("<|Me|>")[1]
+                    preview = after_me.split("<|")[0][:80]
+                # Parse user agent into short device label
+                ua = data.get("user_agent", "")
+                device = ""
+                if ua:
+                    if "iPhone" in ua:
+                        device = "iPhone"
+                    elif "iPad" in ua:
+                        device = "iPad"
+                    elif "Android" in ua:
+                        device = "Android"
+                    elif "Macintosh" in ua:
+                        device = "Mac"
+                    elif "Windows" in ua:
+                        device = "Windows"
+                    elif "Linux" in ua:
+                        device = "Linux"
+                convos.append({
+                    "session_id": data.get("session_id", f.stem),
+                    "created_at": data.get("created_at"),
+                    "updated_at": data.get("updated_at"),
+                    "message_count": msg_count,
+                    "preview": preview,
+                    "device": device,
+                })
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return jsonify({"conversations": convos})
+
+
+@app.route("/api/admin/conversations/<session_id>", methods=["GET"])
+@admin_required
+def admin_conversation_detail(session_id):
+    """Return a single conversation's full history."""
+    filepath = safe_conversation_path(session_id)
+    if not filepath or not filepath.exists():
+        return jsonify({"error": "Not found"}), 404
+    data = json.loads(filepath.read_text())
+    return jsonify(data)
+
+
+@app.route("/api/conversation/<session_id>", methods=["GET"])
+def get_conversation(session_id):
+    """Return a conversation's history (public, for replay)."""
+    filepath = safe_conversation_path(session_id)
+    if not filepath or not filepath.exists():
+        return jsonify({"error": "Not found"}), 404
+    data = json.loads(filepath.read_text())
+    return jsonify({"history": data.get("history", "")})
+
+
+@app.route("/api/admin/delete-checkpoint", methods=["POST"])
+@admin_required
+def admin_delete_checkpoint():
+    """Soft-delete a checkpoint (remove file, keep training step record)."""
+    step_id = request.json.get("step_id")
+    if not step_id:
+        return jsonify({"error": "step_id required"}), 400
+
+    history = load_training_history()
+    step = next((s for s in history["steps"] if s["id"] == step_id), None)
+    if not step:
+        return jsonify({"error": "Step not found"}), 404
+
+    # Delete the checkpoint file
+    cp_name = step.get("checkpoint", f"step_{step_id}")
+    checkpoints_dir = Path(os.environ.get("CHECKPOINTS_DIR", "checkpoints"))
+    cp_path = checkpoints_dir / f"{cp_name}.pt"
+    if cp_path.exists():
+        cp_path.unlink()
+
+    # Mark as deleted in training history
+    step["deleted"] = True
+    with open(TRAINING_HISTORY_PATH, "w") as f:
+        yaml.dump(history, f, default_flow_style=False)
+
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/rollback", methods=["POST"])
+@admin_required
+def admin_rollback():
+    """Rollback model to a specific training step's checkpoint."""
+    step_id = request.json.get("step_id")
+    if not step_id:
+        return jsonify({"error": "step_id required"}), 400
+
+    history = load_training_history()
+    step = next((s for s in history["steps"] if s["id"] == step_id), None)
+    if not step:
+        return jsonify({"error": "Step not found"}), 404
+
+    cp_name = step.get("checkpoint", f"step_{step_id}")
+    checkpoints_dir = Path(os.environ.get("CHECKPOINTS_DIR", "checkpoints"))
+    cp_path = checkpoints_dir / f"{cp_name}.pt"
+
+    if not cp_path.exists():
+        return jsonify({"error": "Checkpoint file not found (deleted?)"}), 404
+
+    model.reload_checkpoint(str(cp_path))
+    return jsonify({"success": True, "loaded": str(cp_path)})
+
+
+@app.route("/api/admin/rollback-pretrained", methods=["POST"])
+@admin_required
+def admin_rollback_pretrained():
+    """Rollback model to the base pretrained checkpoint."""
+    checkpoints_dir = Path(os.environ.get("CHECKPOINTS_DIR", "checkpoints"))
+    cp_path = checkpoints_dir / "pretrained.pt"
+    if not cp_path.exists():
+        return jsonify({"error": "pretrained.pt not found"}), 404
+    model.reload_checkpoint(str(cp_path))
+    return jsonify({"success": True, "loaded": str(cp_path)})
+
+
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
@@ -481,6 +698,11 @@ def index():
 @app.route("/mike-rl")
 def drive():
     return send_from_directory("static", "drive.html")
+
+
+@app.route("/admin")
+def admin():
+    return send_from_directory("static", "admin.html")
 
 
 @app.route("/<path:path>")
@@ -501,9 +723,16 @@ if __name__ == "__main__":
         default=default_checkpoint,
         help="File from which to load model checkpoint (default: $CHECKPOINTS_DIR/pretrained.pt)",
     )
+    arguments.add_argument(
+        "--admin-password",
+        type=str,
+        default=os.environ.get("ADMIN_PASSWORD"),
+        help="Password for /admin dashboard (or set ADMIN_PASSWORD env var)",
+    )
     args = arguments.parse_args()
 
-
+    global ADMIN_PASSWORD
+    ADMIN_PASSWORD = args.admin_password
     model = Model(checkpoint_path=args.checkpoint)
 
     # Create static folder if it doesn't exist

@@ -404,8 +404,33 @@ document.querySelectorAll('.mobile-tab').forEach(tab => {
     });
 });
 
-// Initialize: auto-start if enabled
-if (mikeStartsFirst) {
+// Initialize: replay a saved conversation if ?replay= param present, otherwise auto-start
+const replayParam = new URLSearchParams(window.location.search).get('replay');
+if (replayParam) {
+    fetch(`${API_URL}/api/conversation/${encodeURIComponent(replayParam)}`)
+        .then(res => {
+            if (!res.ok) throw new Error('Conversation not found');
+            return res.json();
+        })
+        .then(data => {
+            if (!data.history) return;
+            conversationHistory = data.history;
+            // Parse and render messages
+            const h = data.history.replace(/<\|ConversationStart\|>/g, '');
+            const parts = h.split(/(<\|(?:Them|Me)\|>)/);
+            let role = null;
+            for (const part of parts) {
+                if (part === '<|Them|>') { role = 'user'; continue; }
+                if (part === '<|Me|>') { role = 'bot'; continue; }
+                // Skip reaction tokens in display
+                if (part.match(/^<\|/)) continue;
+                if (role && part.trim()) {
+                    addMessage(part.trim(), role === 'user');
+                }
+            }
+        })
+        .catch(() => { if (mikeStartsFirst) autoStartConversation(); });
+} else if (mikeStartsFirst) {
     autoStartConversation();
 }
 
