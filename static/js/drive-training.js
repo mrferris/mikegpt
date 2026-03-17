@@ -1,5 +1,18 @@
 // drive-training.js - Training, selection, and RL method functions
 
+function dismissModal(id, storageKey) {
+    document.getElementById(id).classList.add('hidden');
+    localStorage.setItem(storageKey, '1');
+}
+
+function maybeShowWelcome(mode) {
+    if (mode === 'pair' && !localStorage.getItem('mikerl_pair_seen')) {
+        setTimeout(() => document.getElementById('pair-welcome').classList.remove('hidden'), 1500);
+    } else if (mode === 'group' && !localStorage.getItem('mikerl_group_seen')) {
+        setTimeout(() => document.getElementById('group-welcome').classList.remove('hidden'), 1500);
+    }
+}
+
 function toggleSamplingMethod() {
     samplingMethod = samplingMethod === 'topk' ? 'topp' : 'topk';
     const toggle = document.getElementById('sampling-toggle');
@@ -48,6 +61,8 @@ function setRLMethod(method) {
             startGrpoGeneration();
         }
     }
+
+    maybeShowWelcome(method);
 }
 
 function markPath(type) {

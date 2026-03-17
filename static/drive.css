@@ -1512,3 +1512,68 @@ body.light-mode .grpo-instructions .key {
     }
 }
 
+/* ========== Welcome Modals ========== */
+
+.mikerl-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 310;
+    opacity: 1;
+    transition: opacity 0.6s ease;
+}
+
+.mikerl-modal.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.mikerl-modal-box {
+    max-width: 480px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 20px;
+    text-align: center;
+}
+
+.mikerl-modal-box p {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 15px;
+    line-height: 1.7;
+    margin-bottom: 16px;
+}
+
+.mikerl-modal-box ul {
+    text-align: left;
+    margin: 0 0 16px 20px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+.mikerl-modal-box li {
+    margin-bottom: 6px;
+}
+
+.mikerl-modal-box p:last-of-type {
+    margin-bottom: 24px;
+}
+
+.mikerl-modal-btn {
+    background: #fff;
+    color: #000;
+    border: 2px solid #fff;
+    padding: 10px 36px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+

@@ -159,6 +159,26 @@
         </div>
     </div>
 
+    <!-- Welcome Modals -->
+    <div class="mikerl-modal hidden" id="pair-welcome">
+        <div class="mikerl-modal-box">
+            <p>MikeRL allows you to explore the token tree and align MikeGPT's behavior:</p>
+            <ul>
+                <li><b>Left/right axis:</b> MikeGPT's ranked probability for each possible next token in the sequence.</li>
+                <li><b>Depth axis:</b> the probabilities of tokens further along the sequence, and how those shift as you change the current token.</li>
+            </ul>
+            <p>Once you've found a path you like and one you don't, label them and run a training step. MikeGPT will update to favor the good path.</p>
+            <button class="mikerl-modal-btn" onclick="dismissModal('pair-welcome', 'mikerl_pair_seen')">Got it</button>
+        </div>
+    </div>
+
+    <div class="mikerl-modal hidden" id="group-welcome">
+        <div class="mikerl-modal-box">
+            <p>Use the Group setting to do bulk ranking of outputs. This provides broader but less fine-grained learning signal than the Pair setting.</p>
+            <button class="mikerl-modal-btn" onclick="dismissModal('group-welcome', 'mikerl_group_seen')">Got it</button>
+        </div>
+    </div>
+
     <!-- JavaScript files loaded in dependency order -->
     <script src="js/drive-state.js"></script>
     <script src="js/drive-api.js"></script>
