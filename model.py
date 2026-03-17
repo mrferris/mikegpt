@@ -230,6 +230,8 @@ class Model:
                 last_logits = logits[0, -1] / temperature
 
             last_logits[0] = float("-inf")  # suppress <|endoftext|>
+            last_logits[2316] = float("-inf")
+            last_logits[1902] = float("-inf")
             probs = F.softmax(last_logits, dim=-1)
 
             if use_top_k:
@@ -353,6 +355,7 @@ class Model:
                 logits.gather(1, gather_idx).squeeze(1) / temperature
             )  # [N, vocab_size]
             last_logits[:, 0] = float("-inf")  # suppress <|endoftext|>
+            last_logits[:, BANNED_TOKEN_IDS] = float("-inf")
 
             probs = F.softmax(last_logits, dim=-1)  # [N, vocab_size]
             top_probs, top_idx = torch.topk(probs, k=k, dim=-1)  # [N, k] each
@@ -469,6 +472,7 @@ class Model:
                 gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
                 last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature
                 last_logits[:, 0] = float("-inf")
+                last_logits[:, BANNED_TOKEN_IDS] = float("-inf")
 
                 probs = F.softmax(last_logits, dim=-1)
                 sorted_probs, sorted_indices = torch.sort(
@@ -500,6 +504,7 @@ class Model:
                 gather_idx = last_indices.view(-1, 1, 1).expand(-1, 1, logits.size(-1))
                 last_logits = logits.gather(1, gather_idx).squeeze(1) / temperature
                 last_logits[:, 0] = float("-inf")
+                last_logits[:, BANNED_TOKEN_IDS] = float("-inf")
 
                 probs = F.softmax(last_logits, dim=-1)
                 sorted_probs, sorted_indices = torch.sort(

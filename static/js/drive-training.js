@@ -66,6 +66,7 @@ function setRLMethod(method) {
 }
 
 function markPath(type) {
+    if (rlMethod === 'pair' && selectedPaths.some(p => p.type === type)) return;
     const fullPath = getCurrentFullPath();
     // Strip the prompt to show only the response tokens in selections panel
     const responsePath = fullPath.startsWith(treeData.prompt)
