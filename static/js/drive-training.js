@@ -7,9 +7,9 @@ function dismissModal(id, storageKey) {
 
 function maybeShowWelcome(mode) {
     if (mode === 'pair' && !localStorage.getItem('mikerl_pair_seen')) {
-        setTimeout(() => document.getElementById('pair-welcome').classList.remove('hidden'), 1500);
+        setTimeout(() => document.getElementById('pair-welcome').classList.remove('hidden'), 900);
     } else if (mode === 'group' && !localStorage.getItem('mikerl_group_seen')) {
-        setTimeout(() => document.getElementById('group-welcome').classList.remove('hidden'), 1500);
+        setTimeout(() => document.getElementById('group-welcome').classList.remove('hidden'), 900);
     }
 }
 
